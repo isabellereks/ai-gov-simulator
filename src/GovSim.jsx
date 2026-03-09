@@ -30,7 +30,8 @@ const POLS=[{name:"Secure Borders Act",center:.78,lean:"right"},{name:"Green New
 function vt(m,pol){return(1-Math.abs(m.i-pol.center)+(Math.random()-.5)*.35)>.5}
 function sim(ms,pol){const r=ms.map(m=>({...m,v:vt(m,pol)}));const y=r.filter(x=>x.v).length;return{r,y,n:r.length-y,ok:y>r.length/2}}
 
-const VIEWS={idle:{x:0,y:0,w:1280,h:560},hou:{x:30,y:280,w:540,h:280},sen:{x:30,y:-20,w:540,h:280},exc:{x:530,y:100,w:380,h:340},sct:{x:720,y:160,w:480,h:260},done:{x:0,y:0,w:1280,h:560}};
+const VIEWS_MOB={idle:{x:0,y:0,w:1280,h:700},hou:{x:60,y:420,w:460,h:260},sen:{x:60,y:0,w:460,h:240},exc:{x:540,y:170,w:320,h:260},sct:{x:830,y:170,w:440,h:260},done:{x:0,y:0,w:1280,h:700}};
+const VIEWS_DT={idle:{x:0,y:-20,w:1380,h:800},hou:{x:30,y:400,w:540,h:300},sen:{x:30,y:-20,w:540,h:280},exc:{x:480,y:120,w:440,h:340},sct:{x:830,y:150,w:440,h:260},done:{x:0,y:-20,w:1380,h:800}};
 function lerp(a,b,t){return a+(b-a)*t}
 
 // ─── TIMELINE BUILDER ───
@@ -53,7 +54,7 @@ function buildTimeline(policy){
   // President
   ev.push({t,type:"stage",val:"exc"},{t,type:"counter",y:0,n:0});t+=1500;
   const signed=Math.abs(EXC[0].i-policy.center)<.35||Math.random()>.65;
-  ev.push({t,type:"presResult",signed});
+  ev.push({t,type:"vote",id:EXC[0].id,v:signed},{t,type:"presResult",signed});
   if(!signed){t+=1200;ev.push({t,type:"stage",val:"done"},{t,type:"outcome",s:"Vetoed"});return{events:ev,duration:t+2000}}
   t+=800;ev.push({t,type:"pause",next:"Supreme Court"});t+=100;
   // SCOTUS
@@ -68,8 +69,24 @@ function buildTimeline(policy){
   return{events:ev,duration:t+2000};
 }
 
+// ─── RESPONSIVE HOOK ───
+function useWindowSize(){
+  const[size,setSize]=useState(null);
+  useEffect(()=>{
+    function update(){setSize({w:window.innerWidth,h:window.innerHeight})}
+    update();window.addEventListener("resize",update);
+    return()=>window.removeEventListener("resize",update);
+  },[]);
+  return size||{w:1280,h:800};
+}
+function useMounted(){const[m,setM]=useState(false);useEffect(()=>setM(true),[]);return m;}
+
 // ─── COMPONENT ───
 export default function GovSim(){
+  const mounted=useMounted();
+  const win=useWindowSize();
+  const mob=mounted&&win.w<768;
+  const sm=mounted&&win.w<480;
   const[timeline,setTimeline]=useState(null);
   const[playhead,setPlayhead]=useState(0);
   const[playing,setPlaying]=useState(false);
@@ -77,8 +94,8 @@ export default function GovSim(){
   const[pol,setPol]=useState(null);
   const[hov,setHov]=useState(null);
   const[mp,setMp]=useState({x:0,y:0});
-  const[vb,setVb]=useState(VIEWS.idle);
-  const tgt=useRef(VIEWS.idle);const cur=useRef(VIEWS.idle);const lastT=useRef(null);
+  const[vb,setVb]=useState(VIEWS_DT.idle);
+  const tgt=useRef(VIEWS_DT.idle);const cur=useRef(VIEWS_DT.idle);const lastT=useRef(null);
 
   // Derive state from playhead
   const snap=useMemo(()=>{
@@ -111,16 +128,21 @@ export default function GovSim(){
     };raf=requestAnimationFrame(anim);return()=>cancelAnimationFrame(raf);
   },[playing,timeline,speed]);
 
-  useEffect(()=>{tgt.current=VIEWS[snap.stage]||VIEWS.idle},[snap.stage]);
+  const VIEWS=mob?VIEWS_MOB:VIEWS_DT;
+  useEffect(()=>{tgt.current=VIEWS[snap.stage]||VIEWS.idle},[snap.stage,mob]);
 
   // Positions
   const positions=useMemo(()=>{
     const p={};
+    // Senate — left column, top
     [...SEN].sort((a,b)=>a.i-b.i).forEach((s,idx)=>{const a=Math.PI*.06+(idx/(SEN.length-1))*Math.PI*.88;const row=Math.floor(idx/18);p[s.id]={x:Math.cos(a)*(130+row*26)+300,y:Math.sin(a)*(130+row*26)+40}});
-    [...HOU].sort((a,b)=>a.i-b.i).forEach((h,idx)=>{const a=Math.PI*.04+(idx/(HOU.length-1))*Math.PI*.92;const row=Math.floor(idx/14);p[h.id]={x:Math.cos(a)*(95+row*24)+300,y:Math.sin(a)*(95+row*24)+345}});
-    const cx=720,cy=260;p[EXC[0].id]={x:cx,y:cy};p[EXC[1].id]={x:cx,y:cy-65};
+    // House — left column, bottom (well spaced from senate)
+    [...HOU].sort((a,b)=>a.i-b.i).forEach((h,idx)=>{const a=Math.PI*.04+(idx/(HOU.length-1))*Math.PI*.92;const row=Math.floor(idx/14);p[h.id]={x:Math.cos(a)*(95+row*24)+300,y:Math.sin(a)*(95+row*24)+520}});
+    // Executive — middle column, vertically centered
+    const cx=700,cy=310;p[EXC[0].id]={x:cx,y:cy};p[EXC[1].id]={x:cx,y:cy-65};
     EXC.slice(2).forEach((e,idx)=>{const a=(idx/(EXC.length-2))*Math.PI*2-Math.PI/2;const r=85+(idx%2)*30;p[e.id]={x:cx+Math.cos(a)*r,y:cy+Math.sin(a)*r}});
-    const bx=960,by=290;p[SCT[0].id]={x:bx,y:by-40};
+    // SCOTUS — right column, vertically centered
+    const bx=1050,by=310;p[SCT[0].id]={x:bx,y:by-70};
     [3,4,8,7,6,5,2,1].forEach((ji,idx)=>{p[SCT[ji].id]={x:bx-140+idx*40,y:by}});
     return p;
   },[]);
@@ -149,24 +171,27 @@ export default function GovSim(){
   const stageTitle={hou:"House Vote",sen:"Senate Vote",exc:"Presidential Action",sct:"Supreme Court Review"};
 
   // ─── Shared overlay card style ───
-  const cardStyle={background:C.card+"f0",border:`1px solid ${C.border}`,borderRadius:R.lg,boxShadow:S.md};
+  const cardStyle={background:C.card,border:`1px solid ${C.border}`,borderRadius:R.lg,boxShadow:S.md};
 
   return(
-    <div onMouseMove={e=>setMp({x:e.clientX,y:e.clientY})} style={{width:"100%",height:"100vh",overflow:"hidden",position:"relative",background:C.bg,fontFamily:SERIF,color:C.text}}>
+    <div onMouseMove={e=>setMp({x:e.clientX,y:e.clientY})} onClick={e=>{if(mob&&hov&&!e.target.closest("g"))setHov(null)}} style={{width:"100%",height:"100dvh",overflow:"hidden",position:"relative",background:C.bg,fontFamily:SERIF,color:C.text,touchAction:"manipulation"}}>
+      <style>{`@keyframes shimmer{0%,100%{background-position:200% 0}50%{background-position:-200% 0}}`}</style>
       {/* Texture */}
       <div style={{position:"absolute",inset:0,opacity:.02,pointerEvents:"none",backgroundImage:`url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,backgroundSize:"256px"}}/>
 
       {/* SVG */}
       <svg viewBox={vbStr} style={{position:"absolute",inset:0,width:"100%",height:"100%"}} preserveAspectRatio="xMidYMid meet">
         <text x="300" y="16" textAnchor="middle" style={{fontSize:14,fill:C.textMid,letterSpacing:4,fontFamily:SANS,fontWeight:700}}>UNITED STATES SENATE</text>
-        <text x="300" y="320" textAnchor="middle" style={{fontSize:14,fill:C.textMid,letterSpacing:4,fontFamily:SANS,fontWeight:700}}>HOUSE OF REPRESENTATIVES</text>
-        <text x="720" y="135" textAnchor="middle" style={{fontSize:14,fill:C.textMid,letterSpacing:4,fontFamily:SANS,fontWeight:700}}>EXECUTIVE</text>
-        <text x="960" y="218" textAnchor="middle" style={{fontSize:14,fill:C.textMid,letterSpacing:4,fontFamily:SANS,fontWeight:700}}>SUPREME COURT</text>
+        <text x="300" y="470" textAnchor="middle" style={{fontSize:14,fill:C.textMid,letterSpacing:4,fontFamily:SANS,fontWeight:700}}>HOUSE OF REPRESENTATIVES</text>
+        <text x="700" y="170" textAnchor="middle" style={{fontSize:14,fill:C.textMid,letterSpacing:4,fontFamily:SANS,fontWeight:700}}>EXECUTIVE</text>
+        <text x="1050" y="200" textAnchor="middle" style={{fontSize:14,fill:C.textMid,letterSpacing:4,fontFamily:SANS,fontWeight:700}}>SUPREME COURT</text>
 
         {all.map(m=>{const p=positions[m.id];if(!p)return null;const r=nr(m),c=nc(m),isH=hov?.id===m.id,revealed=snap.rv[m.id]!==undefined,scale=revealed?1.3:1;
-          return(<g key={m.id} onMouseEnter={()=>setHov(m)} onMouseLeave={()=>setHov(null)} style={{cursor:"pointer"}}>
+          return(<g key={m.id} style={{cursor:"pointer"}}>
             {isH&&<circle cx={p.x} cy={p.y} r={r*3} fill={c} opacity={.12}/>}
-            <circle cx={p.x} cy={p.y} r={r*scale} fill={c} opacity={isH?1:.85} stroke={isH?C.text:"none"} strokeWidth={1} style={{transition:"fill 0.2s"}}/>
+            {mob&&<circle cx={p.x} cy={p.y} r={Math.max(r*1.8,10)} fill="transparent" onPointerDown={e=>{e.stopPropagation();setMp({x:e.clientX,y:e.clientY});setHov(hov?.id===m.id?null:m)}}/>}
+            <circle cx={p.x} cy={p.y} r={r*scale} fill={c} opacity={isH?1:.85} stroke={isH?C.text:"none"} strokeWidth={1} style={{transition:"fill 0.2s"}}
+              onMouseEnter={()=>{if(!mob)setHov(m)}} onMouseLeave={()=>{if(!mob)setHov(null)}}/>
           </g>)})}
 
         {/* Labels */}
@@ -175,85 +200,95 @@ export default function GovSim(){
       </svg>
 
       {/* ─── Top bar ─── */}
-      <div style={{position:"absolute",top:0,left:0,right:0,padding:"16px 28px",display:"flex",justifyContent:"space-between",alignItems:"center",background:`linear-gradient(180deg, ${C.bg} 60%, ${C.bg}00)`,zIndex:10,pointerEvents:"none"}}>
+      <div style={{position:"absolute",top:0,left:0,right:0,padding:mob?"10px 14px":"16px 28px",display:"flex",flexDirection:mob?"column":"row",justifyContent:"space-between",alignItems:mob?"flex-start":"center",gap:mob?6:0,background:`linear-gradient(180deg, ${C.bg} 60%, ${C.bg}00)`,zIndex:10,pointerEvents:"none"}}>
         <div>
-          <div style={{fontSize:11,letterSpacing:3,textTransform:"uppercase",color:C.textMute,fontFamily:SANS,fontWeight:500}}>Federal Policy Simulator</div>
-          {pol&&<div style={{fontSize:22,fontWeight:400,color:C.text,marginTop:2}}>{pol.name}</div>}
+          <div style={{fontSize:mob?8:11,letterSpacing:mob?1:3,textTransform:"uppercase",color:C.textMute,fontFamily:SANS,fontWeight:500}}>PolicySim: U.S. Federal Policy Simulator</div>
+          {pol&&<div style={{marginTop:2,display:"flex",alignItems:"baseline",gap:mob?6:10,flexWrap:"wrap"}}>
+            <span style={{fontSize:mob?10:12,fontFamily:SANS,fontWeight:600,letterSpacing:mob?1:2,textTransform:"uppercase",color:C.textMute,background:`linear-gradient(90deg,${C.textMute},${C.text},${C.textMute})`,backgroundSize:"200% 100%",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",animation:"shimmer 2.5s ease-in-out infinite"}}>Now voting on:</span>
+            <span style={{fontSize:mob?16:22,fontWeight:400,color:C.text}}>{pol.name}</span>
+          </div>}
         </div>
-        {pol&&<div style={{display:"flex",gap:10}}>
-          {["hou","sen","exc","sct"].map((s,i)=>{const labels=["House","Senate","President","Court"];const done=["hou","sen","exc","sct"].indexOf(snap.stage)>i||snap.stage==="done";const act=snap.stage===s;
-            return(<div key={s} style={{display:"flex",alignItems:"center",gap:5}}>
-              <div style={{width:8,height:8,borderRadius:"50%",background:act?C.rep:done?C.yea:C.border,boxShadow:act?`0 0 8px ${C.rep}66`:"none"}}/>
-              <span style={{fontSize:13,fontFamily:SANS,color:act?C.text:done?C.yeaMute:C.textMute,fontWeight:act?700:400}}>{labels[i]}</span>
-              {i<3&&<span style={{color:C.border,fontSize:11}}>→</span>}
+        {pol&&<div style={{display:"flex",gap:mob?6:10}}>
+          {["hou","sen","exc","sct"].map((s,i)=>{const labels=mob?["H","S","P","C"]:["House","Senate","President","Court"];const done=["hou","sen","exc","sct"].indexOf(snap.stage)>i||snap.stage==="done";const act=snap.stage===s;
+            return(<div key={s} style={{display:"flex",alignItems:"center",gap:mob?3:5}}>
+              <div style={{width:mob?6:8,height:mob?6:8,borderRadius:"50%",background:act?C.rep:done?C.yea:C.border,boxShadow:act?`0 0 8px ${C.rep}66`:"none"}}/>
+              <span style={{fontSize:mob?10:13,fontFamily:SANS,color:act?C.text:done?C.yeaMute:C.textMute,fontWeight:act?700:400}}>{labels[i]}</span>
+              {i<3&&<span style={{color:C.border,fontSize:mob?9:11}}>→</span>}
             </div>)})}
         </div>}
       </div>
 
-      {/* ─── Watermark ─── */}
-      {isActive&&stageTitle[snap.stage]&&<div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",pointerEvents:"none",zIndex:3,opacity:.07}}>
-        <div style={{fontSize:72,fontWeight:300,color:C.text,letterSpacing:4}}>{stageTitle[snap.stage]}</div>
-      </div>}
+      {/* ─── Watermark (removed) ─── */}
 
       {/* ─── Continue prompt ─── */}
-      {snap.paused&&!playing&&<div style={{position:"absolute",bottom:68,left:"50%",transform:"translateX(-50%)",textAlign:"center",zIndex:20,...cardStyle,padding:"16px 32px"}}>
-        <div style={{fontSize:13,color:C.textMute,fontFamily:SANS,fontWeight:500,marginBottom:10}}>
+      {snap.paused&&!playing&&<div style={{position:"absolute",bottom:mob?64:68,left:"50%",transform:"translateX(-50%)",textAlign:"center",zIndex:20,...cardStyle,padding:mob?"12px 18px":"16px 32px",maxWidth:mob?"90vw":"none"}}>
+        <div style={{fontSize:mob?11:13,color:C.textMute,fontFamily:SANS,fontWeight:500,marginBottom:mob?6:10}}>
           {snap.hR&&!snap.sR?`House ${snap.hR.ok?"passed":"failed"} ${snap.hR.y}–${snap.hR.n}`:snap.sR&&!snap.pR?`Senate ${snap.sR.ok?"passed":"failed"} ${snap.sR.y}–${snap.sR.n}`:snap.pR?`President ${snap.pR.signed?"signed":"vetoed"}`:""}
         </div>
-        <div onClick={()=>{setPlaying(true);setPlayhead(p=>p+150)}} style={{display:"inline-flex",alignItems:"center",gap:8,padding:"10px 28px",borderRadius:R.md,background:C.bar,color:C.bg,cursor:"pointer",fontSize:14,fontFamily:SANS,fontWeight:600}}>
-          Continue to {snap.paused.next}<span style={{fontSize:16}}>→</span>
+        <div onClick={()=>{setPlaying(true);setPlayhead(p=>p+150)}} style={{display:"inline-flex",alignItems:"center",gap:6,padding:mob?"8px 18px":"10px 28px",borderRadius:R.md,background:C.bar,color:C.bg,cursor:"pointer",fontSize:mob?12:14,fontFamily:SANS,fontWeight:600,pointerEvents:"auto"}}>
+          Continue to {snap.paused.next}<span style={{fontSize:mob?13:16}}>→</span>
         </div>
       </div>}
 
       {/* ─── Live counter ─── */}
       {isActive&&!snap.out&&!(snap.paused&&!playing)&&(snap.stage==="hou"||snap.stage==="sen"||snap.stage==="sct")&&(snap.cy>0||snap.cn>0)&&
-        <div style={{position:"absolute",bottom:68,left:"50%",transform:"translateX(-50%)",display:"flex",gap:36,alignItems:"baseline",zIndex:10,...cardStyle,padding:"14px 40px"}}>
-          <div style={{textAlign:"center"}}><div style={{fontSize:48,fontWeight:300,color:C.yea,lineHeight:1,fontFamily:SANS}}>{snap.cy}</div><div style={{fontSize:12,color:C.yeaMute,fontFamily:SANS,fontWeight:600,letterSpacing:2,marginTop:2}}>YEA</div></div>
-          <div style={{width:1,height:48,background:C.border}}/>
-          <div style={{textAlign:"center"}}><div style={{fontSize:48,fontWeight:300,color:C.nay,lineHeight:1,fontFamily:SANS}}>{snap.cn}</div><div style={{fontSize:12,color:C.nayMute,fontFamily:SANS,fontWeight:600,letterSpacing:2,marginTop:2}}>NAY</div></div>
+        <div style={{position:"absolute",bottom:mob?64:68,left:"50%",transform:"translateX(-50%)",display:"flex",gap:mob?20:36,alignItems:"baseline",zIndex:10,...cardStyle,padding:mob?"10px 24px":"14px 40px"}}>
+          <div style={{textAlign:"center"}}><div style={{fontSize:mob?32:48,fontWeight:300,color:C.yea,lineHeight:1,fontFamily:SANS}}>{snap.cy}</div><div style={{fontSize:mob?10:12,color:C.yeaMute,fontFamily:SANS,fontWeight:600,letterSpacing:2,marginTop:2}}>YEA</div></div>
+          <div style={{width:1,height:mob?32:48,background:C.border}}/>
+          <div style={{textAlign:"center"}}><div style={{fontSize:mob?32:48,fontWeight:300,color:C.nay,lineHeight:1,fontFamily:SANS}}>{snap.cn}</div><div style={{fontSize:mob?10:12,color:C.nayMute,fontFamily:SANS,fontWeight:600,letterSpacing:2,marginTop:2}}>NAY</div></div>
         </div>}
 
       {/* ─── Presidential decision ─── */}
-      {snap.pR&&snap.stage==="exc"&&!snap.out&&<div style={{position:"absolute",bottom:68,left:"50%",transform:"translateX(-50%)",textAlign:"center",zIndex:10,...cardStyle,padding:"16px 44px"}}>
-        <div style={{fontSize:36,fontWeight:400,color:snap.pR.signed?C.yea:C.nay}}>{snap.pR.signed?"Signed Into Law":"Vetoed"}</div>
-      </div>}
+      {snap.pR&&snap.stage==="exc"&&!snap.out&&!(snap.paused&&!playing)&&
+        <div style={{position:"absolute",bottom:mob?64:68,left:"50%",transform:"translateX(-50%)",textAlign:"center",zIndex:10,maxWidth:mob?"90vw":"none"}}>
+          <div style={{background:C.card,borderRadius:R.lg,padding:mob?"14px 28px":"18px 44px",boxShadow:S.lg,border:`1px solid ${C.border}`}}>
+            <div style={{fontSize:mob?10:11,fontFamily:SANS,fontWeight:600,letterSpacing:2,textTransform:"uppercase",color:C.textMute,marginBottom:4}}>Presidential Action</div>
+            <div style={{fontSize:mob?20:28,fontWeight:600,fontFamily:SANS,color:snap.pR.signed?C.yea:C.nay}}>{snap.pR.signed?"Signed Into Law":"Vetoed"}</div>
+          </div>
+        </div>}
 
       {/* ─── Outcome ─── */}
-      {snap.out&&<div style={{position:"absolute",bottom:68,left:"50%",transform:"translateX(-50%)",textAlign:"center",zIndex:20,background:C.card+"f8",border:`2px solid ${snap.out.s==="Enacted"?C.yea+"44":C.nay+"44"}`,borderRadius:R.lg,boxShadow:S.lg,padding:"20px 48px"}}>
-        <div style={{fontSize:42,fontWeight:400,lineHeight:1.1,color:snap.out.s==="Enacted"?C.yea:C.nay}}>
-          {snap.out.s==="Enacted"&&"Law Enacted"}{snap.out.s==="Defeated"&&`Defeated in the ${snap.out.w}`}{snap.out.s==="Vetoed"&&"Presidential Veto"}{snap.out.s==="Unconstitutional"&&"Ruled Unconstitutional"}
-        </div>
-      </div>}
+      {snap.out&&(()=>{
+        const won=snap.out.s==="Enacted";
+        const label={Enacted:"Law Enacted",Defeated:`Defeated in the ${snap.out.w}`,Vetoed:"Presidential Veto",Unconstitutional:"Ruled Unconstitutional"}[snap.out.s];
+        const accent=won?C.yea:C.nay;
+        return <div style={{position:"absolute",bottom:mob?64:68,left:"50%",transform:"translateX(-50%)",textAlign:"center",zIndex:20,maxWidth:mob?"90vw":"none"}}>
+          <div style={{background:C.card,borderRadius:R.lg,padding:mob?"16px 28px":"22px 52px",boxShadow:S.lg,border:`1px solid ${C.border}`}}>
+            <div style={{fontSize:mob?10:11,fontFamily:SANS,fontWeight:600,letterSpacing:2,textTransform:"uppercase",color:C.textMute,marginBottom:6}}>Final Result</div>
+            <div style={{fontSize:mob?22:34,fontWeight:600,fontFamily:SANS,color:accent,lineHeight:1.1}}>{label}</div>
+          </div>
+        </div>;
+      })()}
 
       {/* ─── Hero / idle ─── */}
-      {!timeline&&<div style={{position:"absolute",inset:0,zIndex:20,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:C.bg}}>
+      {!timeline&&<div style={{position:"absolute",inset:0,zIndex:20,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:C.bg,padding:mob?"20px 16px":"0",overflow:"auto"}}>
         <div style={{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none"}}>
           {[{x:"8%",y:"18%",s:80,c:C.rep,o:.06},{x:"85%",y:"22%",s:60,c:C.dem,o:.06},{x:"15%",y:"75%",s:50,c:C.dem,o:.05},{x:"78%",y:"70%",s:70,c:C.rep,o:.05},{x:"50%",y:"12%",s:40,c:C.textMute,o:.04},{x:"92%",y:"50%",s:45,c:C.rep,o:.04},{x:"5%",y:"48%",s:55,c:C.dem,o:.04}].map((d,i)=>
-            <div key={i} style={{position:"absolute",left:d.x,top:d.y,width:d.s,height:d.s,borderRadius:"50%",background:d.c,opacity:d.o,transform:"translate(-50%,-50%)"}}/>)}
+            <div key={i} style={{position:"absolute",left:d.x,top:d.y,width:mob?d.s*.6:d.s,height:mob?d.s*.6:d.s,borderRadius:"50%",background:d.c,opacity:d.o,transform:"translate(-50%,-50%)"}}/>)}
         </div>
-        <div style={{textAlign:"center",marginBottom:36,position:"relative"}}>
-          <div style={{fontSize:12,letterSpacing:6,textTransform:"uppercase",color:C.textMute,fontFamily:SANS,fontWeight:600,marginBottom:10}}>U.S. Federal Government</div>
-          <h1 style={{fontSize:56,fontWeight:300,color:C.text,lineHeight:1,margin:0,letterSpacing:-1.5}}>Policy Simulator</h1>
-          <div style={{fontSize:14,color:C.textMute,marginTop:12,fontFamily:SANS,fontWeight:400,letterSpacing:1}}>Senate · House · Executive · Supreme Court</div>
+        <div style={{textAlign:"center",marginBottom:mob?20:36,position:"relative"}}>
+          <div style={{fontSize:mob?10:12,letterSpacing:mob?3:6,textTransform:"uppercase",color:C.textMute,fontFamily:SANS,fontWeight:600,marginBottom:mob?6:10}}>U.S. Federal Government</div>
+          <h1 style={{fontSize:sm?32:mob?40:56,fontWeight:300,color:C.text,lineHeight:1,margin:0,letterSpacing:-1.5}}>Policy Simulator</h1>
+          <div style={{fontSize:mob?12:14,color:C.textMute,marginTop:mob?8:12,fontFamily:SANS,fontWeight:400,letterSpacing:1}}>Senate · House · Executive · Supreme Court</div>
         </div>
-        <div style={{position:"relative",width:360}}>
+        <div style={{position:"relative",width:mob?"100%":360,maxWidth:360}}>
           <div style={{background:C.card,borderRadius:R.lg,overflow:"hidden",boxShadow:`${S.sm}, ${S.lg}`,border:`1px solid ${C.border}`}}>
-            <div style={{padding:"12px 20px",borderBottom:`1px solid ${C.borderLight}`}}>
-              <span style={{fontSize:11,color:C.textMute,fontFamily:SANS,fontWeight:600,letterSpacing:2,textTransform:"uppercase"}}>Select a bill</span>
+            <div style={{padding:mob?"10px 16px":"12px 20px",borderBottom:`1px solid ${C.borderLight}`}}>
+              <span style={{fontSize:mob?10:11,color:C.textMute,fontFamily:SANS,fontWeight:600,letterSpacing:2,textTransform:"uppercase"}}>Select a bill</span>
             </div>
-            {POLS.map((p,idx)=><div key={idx} onClick={()=>go(p)} style={{padding:"11px 20px",cursor:"pointer",borderBottom:idx<POLS.length-1?`1px solid ${C.borderLight}`:"none",display:"flex",alignItems:"center",gap:11,transition:"background 0.1s"}}
-              onMouseEnter={e=>e.currentTarget.style.background=C.cardAlt} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+            {POLS.map((p,idx)=><div key={idx} onClick={()=>go(p)} style={{padding:mob?"10px 16px":"11px 20px",cursor:"pointer",borderBottom:idx<POLS.length-1?`1px solid ${C.borderLight}`:"none",display:"flex",alignItems:"center",gap:mob?8:11,transition:"background 0.1s"}}
+              onMouseEnter={e=>{if(!mob)e.currentTarget.style.background=C.cardAlt}} onMouseLeave={e=>{if(!mob)e.currentTarget.style.background="transparent"}}>
               <span style={{width:8,height:8,borderRadius:"50%",flexShrink:0,background:p.lean==="right"?C.rep:p.lean==="left"?C.dem:C.textMute}}/>
-              <span style={{fontSize:15,fontWeight:500,color:C.text}}>{p.name}</span>
+              <span style={{fontSize:mob?14:15,fontWeight:500,color:C.text}}>{p.name}</span>
             </div>)}
           </div>
         </div>
       </div>}
 
       {/* ─── Tooltip ─── */}
-      {hov&&<div style={{position:"fixed",left:mp.x+16,top:mp.y-12,background:C.card,border:`1px solid ${C.border}`,borderRadius:R.md,padding:"8px 14px",zIndex:1000,pointerEvents:"none",boxShadow:S.md}}>
-        <div style={{fontSize:15,fontWeight:600,color:C.text}}>{hov.n}</div>
-        <div style={{fontSize:11,color:C.textMute,marginTop:1}}>{hov.r}{hov.s?`, ${hov.s}`:""}</div>
+      {hov&&<div style={mob?{position:"fixed",left:Math.min(Math.max(mp.x,80),win.w-80),top:mp.y-90,transform:"translateX(-50%)",background:C.card,border:`1px solid ${C.border}`,borderRadius:R.md,padding:"6px 12px",zIndex:1000,pointerEvents:"none",boxShadow:S.md,maxWidth:"80vw"}:{position:"fixed",left:mp.x+16,top:mp.y-12,background:C.card,border:`1px solid ${C.border}`,borderRadius:R.md,padding:"8px 14px",zIndex:1000,pointerEvents:"none",boxShadow:S.md}}>
+        <div style={{fontSize:mob?13:15,fontWeight:600,color:C.text}}>{hov.n}</div>
+        <div style={{fontSize:mob?10:11,color:C.textMute,marginTop:1}}>{hov.r}{hov.s?`, ${hov.s}`:""}</div>
         <div style={{display:"flex",gap:6,marginTop:4}}>
           <span style={{fontSize:10,padding:"1px 6px",borderRadius:R.sm,background:partyColor(hov.p)+"18",color:partyColor(hov.p),fontFamily:SANS,fontWeight:600}}>{hov.p==="R"?"Republican":hov.p==="D"?"Democrat":"Independent"}</span>
         </div>
@@ -262,31 +297,33 @@ export default function GovSim(){
       </div>}
 
       {/* ─── Video bar ─── */}
-      {timeline&&<div style={{position:"absolute",bottom:0,left:0,right:0,zIndex:30,background:C.bar,padding:"8px 20px",display:"flex",alignItems:"center",gap:14,height:48}}>
-        {/* Play */}
-        <div onClick={()=>{if(playhead>=(timeline?.duration||0))replay();else setPlaying(!playing)}} style={{width:30,height:30,borderRadius:"50%",background:C.barKnob,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
-          {playing?<svg width="12" height="12" viewBox="0 0 14 14"><rect x="2" y="1" width="3.5" height="12" rx="1" fill={C.bar}/><rect x="8.5" y="1" width="3.5" height="12" rx="1" fill={C.bar}/></svg>
-          :<svg width="12" height="12" viewBox="0 0 14 14"><path d="M4 1.5l7.5 5.5L4 12.5z" fill={C.bar}/></svg>}
+      {timeline&&<div style={{position:"absolute",bottom:0,left:0,right:0,zIndex:30,background:C.bar,paddingBottom:mob?"env(safe-area-inset-bottom, 8px)":"0"}}>
+        <div style={{padding:mob?"8px 12px":"8px 20px",display:"flex",alignItems:"center",gap:mob?10:14,height:mob?40:48}}>
+          {/* Play */}
+          <div onClick={()=>{if(playhead>=(timeline?.duration||0))replay();else setPlaying(!playing)}} style={{width:32,height:32,borderRadius:"50%",background:C.barKnob,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+            {playing?<svg width="12" height="12" viewBox="0 0 14 14"><rect x="2" y="1" width="3.5" height="12" rx="1" fill={C.bar}/><rect x="8.5" y="1" width="3.5" height="12" rx="1" fill={C.bar}/></svg>
+            :<svg width="12" height="12" viewBox="0 0 14 14"><path d="M4 1.5l7.5 5.5L4 12.5z" fill={C.bar}/></svg>}
+          </div>
+          {/* Track */}
+          <div style={{flex:1,position:"relative",height:30,cursor:"pointer"}} onClick={e=>{const rect=e.currentTarget.getBoundingClientRect();const cx=e.clientX||0;setPlayhead(Math.max(0,Math.min(1,(cx-rect.left)/rect.width))*timeline.duration);cur.current=VIEWS.idle}}
+            onTouchStart={e=>{const rect=e.currentTarget.getBoundingClientRect();const cx=e.touches[0].clientX;setPlayhead(Math.max(0,Math.min(1,(cx-rect.left)/rect.width))*timeline.duration);cur.current=VIEWS.idle}}>
+            {sections.map((s,idx)=><div key={idx} style={{position:"absolute",left:`${s.start*100}%`,width:`${(s.end-s.start)*100}%`,top:0,height:30}}>
+              <div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",fontSize:mob?8:9,color:C.barMute,fontFamily:SANS,fontWeight:600,whiteSpace:"nowrap",letterSpacing:mob?0:1}}>{mob?s.label.charAt(0):s.label}</div>
+              <div style={{position:"absolute",top:14,left:0,right:0,height:4,borderRadius:2,background:idx%2===0?C.barTrack:C.barTrackAlt}}/>
+              {idx>0&&<div style={{position:"absolute",top:12,left:0,width:1,height:8,background:C.barMute}}/>}
+            </div>)}
+            <div style={{position:"absolute",top:14,left:0,right:0,height:4,background:"#352e22",borderRadius:2,zIndex:-1}}/>
+            <div style={{position:"absolute",top:14,left:0,height:4,borderRadius:2,width:`${pct*100}%`,background:C.barFill,zIndex:1}}/>
+            <div style={{position:"absolute",top:10,left:`${pct*100}%`,transform:"translateX(-50%)",width:12,height:12,borderRadius:"50%",background:C.barKnob,boxShadow:"0 1px 4px rgba(0,0,0,.3)",zIndex:2}}/>
+          </div>
+          {/* Speed + New */}
+          <div style={{display:"flex",alignItems:"center",gap:mob?6:8,flexShrink:0}}>
+            {!sm&&<div style={{display:"flex",gap:2}}>
+              {[.5,1,2].map(s=><div key={s} onClick={()=>setSpeed(s)} style={{padding:"2px 6px",borderRadius:R.sm,cursor:"pointer",background:speed===s?C.barKnob:"transparent",color:speed===s?C.bar:C.barMute,fontSize:11,fontFamily:SANS,fontWeight:600}}>{s}x</div>)}
+            </div>}
+            <div onClick={reset} style={{padding:"4px 12px",borderRadius:R.sm,cursor:"pointer",border:`1px solid ${C.barMute}`,color:C.barFill,fontSize:10,fontFamily:SANS,fontWeight:600}}>New</div>
+          </div>
         </div>
-        {/* Time */}
-        <span style={{fontSize:11,color:C.barMute,fontFamily:SANS,minWidth:56,flexShrink:0}}>{Math.floor(playhead/1000)}s / {Math.floor((timeline?.duration||0)/1000)}s</span>
-        {/* Track */}
-        <div style={{flex:1,position:"relative",height:30,cursor:"pointer"}} onClick={e=>{const rect=e.currentTarget.getBoundingClientRect();setPlayhead(Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width))*timeline.duration);cur.current=VIEWS.idle}}>
-          {sections.map((s,idx)=><div key={idx} style={{position:"absolute",left:`${s.start*100}%`,width:`${(s.end-s.start)*100}%`,top:0,height:30}}>
-            <div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",fontSize:9,color:C.barMute,fontFamily:SANS,fontWeight:600,whiteSpace:"nowrap",letterSpacing:1}}>{s.label}</div>
-            <div style={{position:"absolute",top:14,left:0,right:0,height:4,borderRadius:2,background:idx%2===0?C.barTrack:C.barTrackAlt}}/>
-            {idx>0&&<div style={{position:"absolute",top:12,left:0,width:1,height:8,background:C.barMute}}/>}
-          </div>)}
-          <div style={{position:"absolute",top:14,left:0,right:0,height:4,background:"#352e22",borderRadius:2,zIndex:-1}}/>
-          <div style={{position:"absolute",top:14,left:0,height:4,borderRadius:2,width:`${pct*100}%`,background:C.barFill,zIndex:1}}/>
-          <div style={{position:"absolute",top:10,left:`${pct*100}%`,transform:"translateX(-50%)",width:12,height:12,borderRadius:"50%",background:C.barKnob,boxShadow:"0 1px 4px rgba(0,0,0,.3)",zIndex:2}}/>
-        </div>
-        {/* Speed */}
-        <div style={{display:"flex",gap:4,flexShrink:0}}>
-          {[.5,1,2].map(s=><div key={s} onClick={()=>setSpeed(s)} style={{padding:"2px 8px",borderRadius:R.sm,cursor:"pointer",background:speed===s?C.barKnob:"transparent",color:speed===s?C.bar:C.barMute,fontSize:11,fontFamily:SANS,fontWeight:600}}>{s}x</div>)}
-        </div>
-        {/* New */}
-        <div onClick={reset} style={{padding:"4px 14px",borderRadius:R.sm,cursor:"pointer",border:`1px solid ${C.barMute}`,color:C.barFill,fontSize:10,fontFamily:SANS,fontWeight:600,flexShrink:0}}>New Bill</div>
       </div>}
     </div>
   );
