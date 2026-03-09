@@ -424,24 +424,24 @@ function simSCOTUS(members, bill) {
 // ─── VIEWS ───
 const isFullHouse = HOU.length > 100;
 const VIEWS_MOB = {
-  idle: { x: -30, y: -20, w: 1340, h: 740 },
+  idle: { x: -60, y: -30, w: 1440, h: 860 },
   hou: isFullHouse ? { x: -30, y: 340, w: 660, h: 360 } : { x: 60, y: 420, w: 460, h: 260 },
   sen: { x: 20, y: -10, w: 560, h: 300 },
   exc: { x: 480, y: 80, w: 460, h: 360 },
   sct: { x: 830, y: 120, w: 440, h: 300 },
   hou_override: isFullHouse ? { x: -30, y: 340, w: 660, h: 360 } : { x: 60, y: 420, w: 460, h: 260 },
   sen_override: { x: 20, y: -10, w: 560, h: 300 },
-  done: { x: -30, y: -20, w: 1340, h: 740 },
+  done: { x: -60, y: -30, w: 1440, h: 860 },
 };
 const VIEWS_DT = {
-  idle: { x: -40, y: -30, w: 1440, h: 840 },
+  idle: { x: -80, y: -50, w: 1540, h: 940 },
   hou: isFullHouse ? { x: -30, y: 340, w: 660, h: 360 } : { x: 30, y: 400, w: 540, h: 300 },
   sen: { x: 10, y: -20, w: 580, h: 300 },
   exc: { x: 460, y: 50, w: 500, h: 430 },
   sct: { x: 830, y: 100, w: 440, h: 320 },
   hou_override: isFullHouse ? { x: -30, y: 340, w: 660, h: 360 } : { x: 30, y: 400, w: 540, h: 300 },
   sen_override: { x: 10, y: -20, w: 580, h: 300 },
-  done: { x: -40, y: -30, w: 1440, h: 840 },
+  done: { x: -80, y: -50, w: 1540, h: 940 },
 };
 
 function lerp(a, b, t) { return a + (b - a) * t; }
