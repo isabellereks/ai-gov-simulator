@@ -181,8 +181,7 @@ const POLS = [
 
 // ─── VOTE FUNCTIONS ───
 function computeVote(member, bill) {
-  // Absurd/violent bills: ~95% vote no, tiny random chance of a few outliers
-  if (bill.isAbsurd) return Math.random() < 0.04;
+  if (bill.isAbsurd) return false;
 
   // For House members without multi-dimensional issues, use legacy method
   if (!member.issues) {
