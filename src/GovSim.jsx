@@ -1,5 +1,9 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { DB } from "./govData";
+import { Button } from "@/src/components/ui/button";
+import { Card, CardTitle, CardContent } from "@/src/components/ui/card";
+import { Input } from "@/src/components/ui/input";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from "@/src/components/ui/dialog";
 
 // ─── DESIGN TOKENS ───
 const C = {
@@ -21,13 +25,30 @@ const S = {
   lg: "0 8px 32px rgba(44,36,24,0.10)",
 };
 
+// ─── NOTABLE MEMBERS (shimmer highlight) ───
+const NOTABLE = new Set([
+  "Ted Cruz", "Bernie Sanders", "Hakeem Jeffries",
+  "Mike Johnson", "Chuck Schumer", "Alexandria Ocasio-Cortez",
+]);
+
 // ─── ISSUE LABELS ───
-const ISSUE_LABELS = {
-  immigration: "immigration", taxes_spending: "taxes & spending", healthcare: "healthcare",
-  gun_rights: "gun rights", climate_energy: "climate & energy", defense_military: "defense",
-  education: "education", tech_regulation: "tech regulation", criminal_justice: "criminal justice",
-  trade_tariffs: "trade & tariffs", abortion_social: "social issues", government_spending: "gov. spending",
-  foreign_policy_hawks: "foreign policy", civil_liberties: "civil liberties", labor_unions: "labor",
+// Each issue has [leftLabel, rightLabel] — 0.0=left position, 1.0=right position
+const ISSUE_DIR = {
+  immigration:          ["pro-immigration", "border security"],
+  taxes_spending:       ["higher taxes on wealthy", "tax cuts"],
+  healthcare:           ["universal healthcare", "free-market healthcare"],
+  gun_rights:           ["gun control", "gun rights expansion"],
+  climate_energy:       ["climate action", "fossil fuel priority"],
+  defense_military:     ["reduce military spending", "increase defense spending"],
+  education:            ["public education funding", "school choice"],
+  tech_regulation:      ["tech regulation", "tech deregulation"],
+  criminal_justice:     ["criminal justice reform", "tough on crime"],
+  trade_tariffs:        ["free trade", "protectionist tariffs"],
+  abortion_social:      ["abortion rights", "abortion restrictions"],
+  government_spending:  ["expand gov. programs", "cut gov. spending"],
+  foreign_policy_hawks: ["diplomatic restraint", "military intervention"],
+  civil_liberties:      ["civil liberties priority", "security priority"],
+  labor_unions:         ["pro-union", "pro-business"],
 };
 
 // ─── MAP DATABASE TO SIM FORMAT ───
@@ -101,7 +122,7 @@ const POLS = [
     constitutionalPosition: { regulatory_authority_admin_state: 0.25, commerce_clause_scope: 0.30, federal_vs_state_power: 0.30 },
   },
   {
-    name: "Tax Relief & Jobs Act", lean: "right", partySupport: "R",
+    name: "Tax Relief & Jobs Act", lean: "right", partySupport: "R", startChamber: "hou",
     issueWeights: { taxes_spending: 0.95, government_spending: 0.7, labor_unions: 0.4, trade_tariffs: 0.3 },
     issuePositions: { taxes_spending: 0.88, government_spending: 0.82, labor_unions: 0.85, trade_tariffs: 0.70 },
     affectedIndustries: ["finance", "real estate", "manufacturing"],
@@ -142,8 +163,8 @@ const POLS = [
   },
   {
     name: "Tech Antitrust Reform", lean: "center", partySupport: "bipartisan",
-    issueWeights: { tech_regulation: 0.95, civil_liberties: 0.4, trade_tariffs: 0.3 },
-    issuePositions: { tech_regulation: 0.55, civil_liberties: 0.45, trade_tariffs: 0.50 },
+    issueWeights: { tech_regulation: 0.95, civil_liberties: 0.5, trade_tariffs: 0.3, government_spending: 0.4 },
+    issuePositions: { tech_regulation: 0.35, civil_liberties: 0.35, trade_tariffs: 0.45, government_spending: 0.30 },
     affectedIndustries: ["technology", "telecommunications", "media"],
     constitutionalIssues: { commerce_clause_scope: 0.6, free_speech_1A: 0.4, regulatory_authority_admin_state: 0.4 },
     constitutionalPosition: { commerce_clause_scope: 0.40, free_speech_1A: 0.45, regulatory_authority_admin_state: 0.40 },
@@ -168,36 +189,59 @@ function computeVote(member, bill) {
     return (1 - Math.abs((member.i || 0.5) - center) + (Math.random() - 0.5) * 0.35) > 0.5;
   }
 
+  // How partisan is this bill? 0 = centrist, 1 = extreme
+  const billPositions = Object.entries(bill.issueWeights || {})
+    .filter(([iss]) => bill.issuePositions?.[iss] !== undefined)
+    .map(([iss, w]) => ({ pos: bill.issuePositions[iss], w }));
+  const avgBillPos = billPositions.length > 0
+    ? billPositions.reduce((s, p) => s + p.pos * p.w, 0) / billPositions.reduce((s, p) => s + p.w, 0)
+    : 0.5;
+  const billPartisanship = Math.abs(avgBillPos - 0.5) * 2; // 0 = center, 1 = extreme
+
   let alignment = 0, totalWeight = 0;
   for (const [issue, weight] of Object.entries(bill.issueWeights || {})) {
     if (member.issues[issue] !== undefined && bill.issuePositions?.[issue] !== undefined) {
       const distance = Math.abs(member.issues[issue] - bill.issuePositions[issue]);
-      alignment += (1 - distance) * weight;
+      // Side-aware: penalize when member and bill are on opposite ideological sides
+      const memberSide = member.issues[issue] - 0.5;
+      const billSide = bill.issuePositions[issue] - 0.5;
+      const opposingSides = memberSide * billSide < 0 && Math.abs(memberSide) > 0.12 && Math.abs(billSide) > 0.12;
+      const agree = opposingSides ? (0.2 - distance * 2.8) : (1 - distance * 2.2);
+      alignment += agree * weight;
       totalWeight += weight;
     }
   }
   if (totalWeight === 0) return Math.random() > 0.5;
 
-  let baseProb = alignment / totalWeight;
+  // Controversy adds opposition: 0 = routine, 1 = highly divisive
+  const controversy = bill.controversy_level || 0.3;
+  let baseProb = (0.48 - controversy * 0.08) + (alignment / totalWeight) * 0.4;
 
-  // Party loyalty
+  // Party loyalty — scales with how partisan the bill is
   if (member.behavior && bill.partySupport && bill.partySupport !== "bipartisan") {
+    const loyaltyStrength = 0.1 + billPartisanship * 0.2;
     const partyAligned = bill.partySupport === member.p;
-    if (partyAligned) baseProb += member.behavior.party_loyalty * 0.12;
-    else baseProb -= member.behavior.party_loyalty * 0.08;
+    if (partyAligned) baseProb += member.behavior.party_loyalty * loyaltyStrength;
+    else baseProb -= member.behavior.party_loyalty * loyaltyStrength * 0.85;
   }
 
-  // State interest / industry overlap
+  // Lobbying & industry influence
   if (member.interests && bill.affectedIndustries) {
     const overlap = member.interests.filter(i =>
       bill.affectedIndustries.some(bi => i.toLowerCase().includes(bi.toLowerCase()) || bi.toLowerCase().includes(i.toLowerCase()))
     );
-    if (overlap.length > 0) baseProb += 0.08;
+    if (overlap.length > 0) {
+      const lobbySusceptibility = member.behavior?.lobby_susceptibility || 0.3;
+      // Industry ties push member toward the status quo (against regulation)
+      // Bills that regulate (position < 0.5) face lobby opposition from industry-tied members
+      const lobbyPush = lobbySusceptibility * 0.15 * (avgBillPos < 0.5 ? -1 : 1);
+      baseProb += lobbyPush;
+    }
   }
 
   // Noise inversely proportional to ideological rigidity
   const rigidity = member.behavior?.ideological_rigidity || 0.5;
-  const noise = (1 - rigidity) * (Math.random() - 0.5) * 0.2;
+  const noise = (1 - rigidity) * (Math.random() - 0.5) * 0.3;
 
   return (baseProb + noise) > 0.5;
 }
@@ -206,11 +250,11 @@ function computeVeto(president, cabinet, bill) {
   let alignment = 0, total = 0;
   for (const [issue, weight] of Object.entries(bill.issueWeights || {})) {
     if (president.issues?.[issue] !== undefined && bill.issuePositions?.[issue] !== undefined) {
-      alignment += (1 - Math.abs(president.issues[issue] - bill.issuePositions[issue])) * weight;
+      alignment += (1 - Math.abs(president.issues[issue] - bill.issuePositions[issue]) * 2) * weight;
       total += weight;
     }
   }
-  let presScore = total > 0 ? alignment / total : 0.5;
+  let presScore = total > 0 ? 0.5 + (alignment / total) * 0.5 : 0.5;
 
   const relevantCabinet = cabinet.filter(c => {
     if (!c.veto_factors) return false;
@@ -232,7 +276,7 @@ function computeVeto(president, cabinet, bill) {
     let cAlign = 0, cTotal = 0;
     for (const [issue, weight] of Object.entries(bill.issueWeights || {})) {
       if (c.issues?.[issue] !== undefined && bill.issuePositions?.[issue] !== undefined) {
-        cAlign += (1 - Math.abs(c.issues[issue] - bill.issuePositions[issue])) * weight;
+        cAlign += (1 - Math.abs(c.issues[issue] - bill.issuePositions[issue]) * 2) * weight;
         cTotal += weight;
       }
     }
@@ -252,12 +296,12 @@ function computeSCOTUSVote(justice, bill) {
   for (const [issue, weight] of Object.entries(bill.constitutionalIssues)) {
     if (justice.constitutional_issues[issue] !== undefined && bill.constitutionalPosition?.[issue] !== undefined) {
       const distance = Math.abs(justice.constitutional_issues[issue] - bill.constitutionalPosition[issue]);
-      alignment += (1 - distance) * weight;
+      alignment += (1 - distance * 2) * weight;
       total += weight;
     }
   }
 
-  let prob = total > 0 ? alignment / total : 0.5;
+  let prob = total > 0 ? 0.5 + (alignment / total) * 0.5 : 0.5;
 
   if (justice.judicial_behavior?.deference_to_legislature) {
     prob += justice.judicial_behavior.deference_to_legislature * 0.15;
@@ -268,6 +312,61 @@ function computeSCOTUSVote(justice, bill) {
 
   const noise = (Math.random() - 0.5) * 0.1;
   return (prob + noise) > 0.5;
+}
+
+const LOBBY_GROUPS = {
+  defense: ["Lockheed Martin", "Raytheon", "Northrop Grumman", "Boeing Defense", "General Dynamics"],
+  energy: ["ExxonMobil", "Chevron", "Koch Industries", "BP America", "NextEra Energy"],
+  technology: ["Google", "Meta", "Apple", "Amazon", "Microsoft"],
+  telecommunications: ["AT&T", "Comcast", "Verizon", "T-Mobile", "Charter Communications"],
+  finance: ["Goldman Sachs", "JPMorgan Chase", "BlackRock", "Citigroup", "Bank of America"],
+  healthcare: ["UnitedHealth Group", "Pfizer", "PhRMA", "Blue Cross Blue Shield", "Johnson & Johnson"],
+  insurance: ["UnitedHealth Group", "Anthem", "Cigna", "Aetna", "Humana"],
+  pharmaceuticals: ["Pfizer", "PhRMA", "Johnson & Johnson", "Merck", "AbbVie"],
+  agriculture: ["American Farm Bureau", "Cargill", "Monsanto", "John Deere", "ADM"],
+  construction: ["Associated Builders", "Caterpillar", "US Chamber of Commerce", "Bechtel", "Turner Construction"],
+  manufacturing: ["NAM", "US Chamber of Commerce", "Caterpillar", "3M", "Honeywell"],
+  "real estate": ["NAR", "CBRE Group", "Zillow Group", "Brookfield", "Blackstone Real Estate"],
+  education: ["NEA", "AFT", "College Board", "Pearson", "McGraw-Hill"],
+  firearms: ["NRA", "NSSF", "Smith & Wesson", "Ruger", "Glock Inc."],
+  transportation: ["AAR", "Airlines for America", "FedEx", "UPS", "Union Pacific"],
+  "legal services": ["ABA", "Trial Lawyers Association", "LegalZoom", "DLA Piper"],
+  "law enforcement": ["FOP", "NAPO", "IACP", "National Sheriffs' Association"],
+  labor: ["AFL-CIO", "SEIU", "Teamsters", "UAW", "AFSCME"],
+  media: ["News Corp", "Disney", "Warner Bros. Discovery", "Paramount", "iHeartMedia"],
+  retail: ["Walmart", "Amazon", "Target", "Costco", "NRF"],
+  automotive: ["GM", "Ford", "Toyota NA", "Alliance for Automotive Innovation", "Tesla"],
+  "small business": ["NFIB", "US Chamber of Commerce", "SBA Council", "Main Street Alliance"],
+  aerospace: ["Boeing", "Lockheed Martin", "SpaceX", "Northrop Grumman", "L3Harris"],
+  banking: ["ABA", "JPMorgan Chase", "Goldman Sachs", "Wells Fargo", "Credit Union National Association"],
+  "tribal affairs": ["NCAI", "National Indian Gaming Association"],
+  veterans: ["VFW", "American Legion", "DAV", "IAVA"],
+  "corporate governance": ["Business Roundtable", "US Chamber of Commerce", "SEC Advisory Committee"],
+  environment: ["Sierra Club", "EDF", "NRDC", "League of Conservation Voters"],
+  tourism: ["US Travel Association", "Marriott", "Hilton", "American Hotel & Lodging Association"],
+};
+function getLobbyInfluence(member, bill) {
+  if (!member.interests || !bill.affectedIndustries) return null;
+  const overlap = member.interests.filter(i =>
+    bill.affectedIndustries.some(bi => i.toLowerCase().includes(bi.toLowerCase()) || bi.toLowerCase().includes(i.toLowerCase()))
+  );
+  if (overlap.length === 0) return null;
+  const lobbySusceptibility = member.behavior?.lobby_susceptibility || 0;
+  if (lobbySusceptibility < 0.3) return null;
+  const avgPos = (() => {
+    const ps = Object.entries(bill.issueWeights || {}).filter(([iss]) => bill.issuePositions?.[iss] !== undefined).map(([iss, w]) => ({ pos: bill.issuePositions[iss], w }));
+    if (ps.length === 0) return 0.5;
+    return ps.reduce((s, p) => s + p.pos * p.w, 0) / ps.reduce((s, p) => s + p.w, 0);
+  })();
+  const isRegulatory = avgPos < 0.5;
+  const industry = overlap[0].replace(/_/g, " ");
+  const strength = lobbySusceptibility > 0.6 ? "Strong" : "Moderate";
+  const key = Object.keys(LOBBY_GROUPS).find(k => industry.toLowerCase().includes(k) || k.includes(industry.toLowerCase()));
+  const groups = key ? LOBBY_GROUPS[key] : null;
+  // Deterministic pick based on member name to avoid re-render flicker
+  const hash = (member.n || member.name || "").split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  const lobbyist = groups ? groups[hash % groups.length] : null;
+  return { industry, strength, direction: isRegulatory ? "against" : "for", lobbySusceptibility, lobbyist };
 }
 
 function getVoteReason(member, bill) {
@@ -288,8 +387,10 @@ function getVoteReason(member, bill) {
     if (weight > maxW && member.issues[issue] !== undefined) { maxW = weight; maxIssue = issue; }
   }
   if (!maxIssue) return null;
-  const dist = Math.abs(member.issues[maxIssue] - (bill.issuePositions?.[maxIssue] ?? 0.5));
-  return (dist < 0.3 ? "Aligned on " : "Opposed on ") + (ISSUE_LABELS[maxIssue] || maxIssue.replace(/_/g, " "));
+  const memberPos = member.issues[maxIssue];
+  const dir = ISSUE_DIR[maxIssue];
+  if (!dir) return (memberPos < 0.5 ? "Leans left on " : "Leans right on ") + maxIssue.replace(/_/g, " ");
+  return "Favors " + (memberPos < 0.5 ? dir[0] : dir[1]);
 }
 
 // ─── SIMULATION FUNCTIONS ───
@@ -334,24 +435,30 @@ function lerp(a, b, t) { return a + (b - a) * t; }
 function buildTimeline(policy) {
   const ev = []; let t = 0;
   const shuf = a => [...a].sort(() => Math.random() - 0.5);
+  const startChamber = policy.startChamber || (Math.random() < 0.5 ? "hou" : "sen");
 
-  // House — adaptive timing: 8ms for 435 members, 30ms for small roster
-  const houStagger = HOU.length > 100 ? 8 : 30;
-  const hr = sim(HOU, policy);
-  ev.push({ t, type: "stage", val: "hou" }, { t, type: "counter", y: 0, n: 0 }); t += 600;
-  const hs = shuf(hr.r); let hy = 0, hn = 0;
-  hs.forEach((m, i) => { if (m.v) hy++; else hn++; ev.push({ t: t + i * houStagger, type: "vote", id: m.id, v: m.v }, { t: t + i * houStagger, type: "counter", y: hy, n: hn }); });
-  t += hs.length * houStagger + 400; ev.push({ t, type: "houseResult", ...hr });
-  if (!hr.ok) { t += 300; ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Defeated", w: "House" }); return { events: ev, duration: t + 2000 }; }
-  t += 600; ev.push({ t, type: "pause", next: "Senate Vote" }); t += 100;
+  // Determine chamber order — revenue bills must start in House (Art. I §7)
+  const first = startChamber === "sen" ? { members: SEN, label: "sen", resultType: "senateResult", stagger: 18, nextLabel: "House Vote" }
+    : { members: HOU, label: "hou", resultType: "houseResult", stagger: HOU.length > 100 ? 8 : 30, nextLabel: "Senate Vote" };
+  const second = startChamber === "sen" ? { members: HOU, label: "hou", resultType: "houseResult", stagger: HOU.length > 100 ? 8 : 30, nextLabel: "Presidential Action" }
+    : { members: SEN, label: "sen", resultType: "senateResult", stagger: 18, nextLabel: "Presidential Action" };
 
-  // Senate
-  const sr = sim(SEN, policy);
-  ev.push({ t, type: "stage", val: "sen" }, { t, type: "counter", y: 0, n: 0 }); t += 600;
-  const ss = shuf(sr.r); let sy = 0, sn = 0;
-  ss.forEach((m, i) => { if (m.v) sy++; else sn++; ev.push({ t: t + i * 18, type: "vote", id: m.id, v: m.v }, { t: t + i * 18, type: "counter", y: sy, n: sn }); });
-  t += ss.length * 18 + 400; ev.push({ t, type: "senateResult", ...sr });
-  if (!sr.ok) { t += 300; ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Defeated", w: "Senate" }); return { events: ev, duration: t + 2000 }; }
+  // First chamber
+  const r1 = sim(first.members, policy);
+  ev.push({ t, type: "stage", val: first.label }, { t, type: "counter", y: 0, n: 0 }); t += 600;
+  const s1 = shuf(r1.r); let y1 = 0, n1 = 0;
+  s1.forEach((m, i) => { if (m.v) y1++; else n1++; ev.push({ t: t + i * first.stagger, type: "vote", id: m.id, v: m.v }, { t: t + i * first.stagger, type: "counter", y: y1, n: n1 }); });
+  t += s1.length * first.stagger + 400; ev.push({ t, type: first.resultType, ...r1 });
+  if (!r1.ok) { t += 300; ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Defeated", w: first.label === "hou" ? "House" : "Senate" }); return { events: ev, duration: t + 2000, startChamber }; }
+  t += 600; ev.push({ t, type: "pause", next: first.nextLabel }); t += 100;
+
+  // Second chamber
+  const r2 = sim(second.members, policy);
+  ev.push({ t, type: "stage", val: second.label }, { t, type: "counter", y: 0, n: 0 }); t += 600;
+  const s2 = shuf(r2.r); let y2 = 0, n2 = 0;
+  s2.forEach((m, i) => { if (m.v) y2++; else n2++; ev.push({ t: t + i * second.stagger, type: "vote", id: m.id, v: m.v }, { t: t + i * second.stagger, type: "counter", y: y2, n: n2 }); });
+  t += s2.length * second.stagger + 400; ev.push({ t, type: second.resultType, ...r2 });
+  if (!r2.ok) { t += 300; ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Defeated", w: second.label === "hou" ? "House" : "Senate" }); return { events: ev, duration: t + 2000, startChamber }; }
   t += 600; ev.push({ t, type: "pause", next: "Presidential Action" }); t += 100;
 
   // President
@@ -361,13 +468,14 @@ function buildTimeline(policy) {
 
   if (!signed) {
     // Veto override
+    const houOvrStagger = HOU.length > 100 ? 8 : 30;
     t += 1200; ev.push({ t, type: "pause", next: "Veto Override – House" }); t += 100;
     ev.push({ t, type: "stage", val: "hou_override" }, { t, type: "counter", y: 0, n: 0 }); t += 600;
     const hor = sim(HOU, policy); const hos = shuf(hor.r); let hoy = 0, hon = 0;
-    hos.forEach((m, i) => { if (m.v) hoy++; else hon++; ev.push({ t: t + i * houStagger, type: "vote", id: m.id, v: m.v }, { t: t + i * houStagger, type: "counter", y: hoy, n: hon }); });
-    t += hos.length * houStagger + 400; const hOverride = hoy >= Math.ceil(HOU.length * 2 / 3);
+    hos.forEach((m, i) => { if (m.v) hoy++; else hon++; ev.push({ t: t + i * houOvrStagger, type: "vote", id: m.id, v: m.v }, { t: t + i * houOvrStagger, type: "counter", y: hoy, n: hon }); });
+    t += hos.length * houOvrStagger + 400; const hOverride = hoy >= Math.ceil(HOU.length * 2 / 3);
     ev.push({ t, type: "overrideResult", chamber: "House", ok: hOverride, y: hoy, n: hon });
-    if (!hOverride) { t += 800; ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Vetoed" }); return { events: ev, duration: t + 2000 }; }
+    if (!hOverride) { t += 800; ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Vetoed" }); return { events: ev, duration: t + 2000, startChamber }; }
 
     t += 600; ev.push({ t, type: "pause", next: "Veto Override – Senate" }); t += 100;
     ev.push({ t, type: "stage", val: "sen_override" }, { t, type: "counter", y: 0, n: 0 }); t += 600;
@@ -375,7 +483,7 @@ function buildTimeline(policy) {
     sos.forEach((m, i) => { if (m.v) soy++; else son++; ev.push({ t: t + i * 18, type: "vote", id: m.id, v: m.v }, { t: t + i * 18, type: "counter", y: soy, n: son }); });
     t += sos.length * 18 + 400; const sOverride = soy >= Math.ceil(SEN.length * 2 / 3);
     ev.push({ t, type: "overrideResult", chamber: "Senate", ok: sOverride, y: soy, n: son });
-    if (!sOverride) { t += 800; ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Vetoed" }); return { events: ev, duration: t + 2000 }; }
+    if (!sOverride) { t += 800; ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Vetoed" }); return { events: ev, duration: t + 2000, startChamber }; }
     t += 800; ev.push({ t, type: "pause", next: "Supreme Court" }); t += 100;
   } else {
     t += 800; ev.push({ t, type: "pause", next: "Supreme Court" }); t += 100;
@@ -391,7 +499,7 @@ function buildTimeline(policy) {
     ev.push({ t, type: "scotusResult", ch: false });
     t += 400;
     ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Enacted" });
-    return { events: ev, duration: t + 2000 };
+    return { events: ev, duration: t + 2000, startChamber };
   }
   t += 800;
   const cr = simSCOTUS(SCT, policy); const cs = shuf(cr.r); let cy2 = 0, cn2 = 0;
@@ -399,24 +507,24 @@ function buildTimeline(policy) {
   t += cs.length * 300 + 500; const upheld = cr.y >= 5;
   ev.push({ t, type: "scotusResult", ch: true, upheld, y: cr.y, n: cr.n }); t += 1000;
   ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: upheld ? "Enacted" : "Unconstitutional" });
-  return { events: ev, duration: t + 2000 };
+  return { events: ev, duration: t + 2000, startChamber };
 }
 
 // ─── KEYWORD BILL ANALYZER ───
 const BILL_KEYWORDS = {
-  immigration: { keys: ["immigra","border","migrant","deport","asylum","visa","refugee","illegal alien","citizenship","daca","dreamer","ice ","customs"], con: ["secure border","deport","illegal","enforce","wall","ice ","ban entry"], lib: ["pathway","amnesty","dreamer","daca","refugee","asylum","protect immigrant"] },
+  immigration: { keys: ["immigra","border","migrant","deport","asylum","visa","refugee","illegal alien","citizenship","daca","dreamer","ice ","customs","wall","undocument","alien","sanctuary"], con: ["secure border","deport","illegal","enforce","wall","ice ","ban entry","build the wall","close the border"], lib: ["pathway","amnesty","dreamer","daca","refugee","asylum","protect immigrant","undocument","sanctuary"] },
   taxes_spending: { keys: ["tax","taxes","taxation","irs","revenue","fiscal","tariff","duty","income tax"], con: ["cut tax","lower tax","flat tax","repeal tax","reduce tax","tax relief"], lib: ["raise tax","wealth tax","tax the rich","progressive tax","corporate tax"] },
   healthcare: { keys: ["health","medicare","medicaid","hospital","drug price","pharma","insurance","medical","obamacare","aca","prescription","mental health"], con: ["repeal aca","repeal obamacare","privatize","health savings","market-based"], lib: ["medicare for all","universal health","single payer","expand medicaid","public option","lower drug"] },
-  gun_rights: { keys: ["gun","firearm","2nd amendment","second amendment","weapon","ar-15","rifle","ammunition","concealed carry","background check","nra"], con: ["protect gun","expand gun","concealed carry","2nd amendment","arm teacher","repeal gun"], lib: ["ban gun","gun control","assault weapon","background check","red flag","gun violence","gun safety"] },
+  gun_rights: { keys: ["gun","firearm","2nd amendment","second amendment","weapon","ar-15","rifle","ammunition","concealed carry","background check","nra","shoot","ar15"], con: ["protect gun","expand gun","concealed carry","2nd amendment","arm teacher","repeal gun"], lib: ["ban gun","gun control","assault weapon","background check","red flag","gun violence","gun safety"] },
   climate_energy: { keys: ["climate","carbon","emission","renewable","solar","wind","fossil","oil","gas","coal","energy","environment","pollution","epa","green","paris accord","drill"], con: ["drill","fossil","repeal epa","coal","deregulat","energy independence","pipeline"], lib: ["renewable","solar","wind","carbon tax","green new","paris","clean energy","climate action","ban fossil","net zero"] },
   defense_military: { keys: ["military","defense","pentagon","army","navy","troops","veteran","nato","missile","nuclear","weapon","warfare","soldier"], con: ["increase defense","military spending","strong military","rebuild military"], lib: ["cut defense","reduce military","withdraw","end war","peace"] },
   education: { keys: ["education","school","student","college","university","teacher","tuition","loan","curriculum","charter"], con: ["school choice","charter","voucher","homeschool","parental rights in ed"], lib: ["free college","student debt","public school","teacher pay","fund education","cancel student"] },
-  tech_regulation: { keys: ["tech","silicon valley","algorithm","ai ","artificial intelligence","data privacy","social media","big tech","tiktok","facebook","google","apple","amazon","antitrust","monopoly","crypto","bitcoin","blockchain"], con: ["deregulat","free market","crypto freedom","protect section 230"], lib: ["regulate tech","break up","antitrust","data privacy","ban tiktok","algorithm","ai safety","ai regulation"] },
-  criminal_justice: { keys: ["crime","criminal","prison","police","sentencing","incarcerat","bail","parole","felony","law enforcement","drug offense","marijuana","cannabis","death penalty","fentanyl"], con: ["tough on crime","mandatory minimum","death penalty","back the blue","increase sentencing","law and order","fund police"], lib: ["reform","decriminaliz","legaliz","abolish","defund police","end mandatory","reduce sentencing","ban death penalty","expunge"] },
+  tech_regulation: { keys: ["tech","silicon valley","algorithm","ai ","artificial intelligence","data privacy","social media","big tech","tiktok","facebook","google","apple","amazon","antitrust","monopoly","crypto","bitcoin","blockchain","internet","app ","platform"], con: ["deregulat","free market","crypto freedom","protect section 230"], lib: ["regulate tech","break up","antitrust","data privacy","ban tiktok","algorithm","ai safety","ai regulation"] },
+  criminal_justice: { keys: ["crime","criminal","prison","police","sentencing","incarcerat","bail","parole","felony","law enforcement","drug offense","marijuana","cannabis","death penalty","fentanyl","weed","drug","jail","murder","kill"], con: ["tough on crime","mandatory minimum","death penalty","back the blue","increase sentencing","law and order","fund police"], lib: ["reform","decriminaliz","legaliz","abolish","defund police","end mandatory","reduce sentencing","ban death penalty","expunge","legalize weed","legalize marijuana","legalize cannabis"] },
   trade_tariffs: { keys: ["trade","tariff","import","export","china trade","nafta","usmca","wto","sanction","embargo","outsourc","supply chain","manufactur"], con: ["tariff","protect american","buy american","sanction","reshoring"], lib: ["free trade","lower tariff","global trade","trade agreement"] },
   abortion_social: { keys: ["abort","reproductive","roe","pro-life","pro-choice","planned parenthood","contracepti","fetal","trimester","lgbtq","transgender","marriage equality","gender","dei","woke","crt","critical race"], con: ["ban abort","pro-life","protect unborn","heartbeat","restrict abort","ban gender","anti-dei","ban crt","religious freedom","traditional marriage"], lib: ["pro-choice","reproductive right","codify roe","protect abort","lgbtq","transgender right","marriage equality","dei","equality act"] },
   government_spending: { keys: ["spend","budget","deficit","debt","fiscal","appropriat","entitlement","welfare","social security","stimulus","bailout","austerity"], con: ["cut spending","reduce deficit","balanced budget","austerity","slash budget","reduce debt"], lib: ["invest","fund","increase spending","stimulus","expand program","social safety"] },
-  foreign_policy_hawks: { keys: ["foreign","diplomacy","sanction","nato","china","russia","iran","israel","ukraine","taiwan","ally","alliance","intelligence","cia","intervention","withdraw"], con: ["sanction","strong against","support israel","defend taiwan","increase aid to israel","confront china","confront russia"], lib: ["diplomacy","negotiate","withdraw","end aid","reduce intervention","peace","ceasefire"] },
+  foreign_policy_hawks: { keys: ["foreign","diplomacy","sanction","nato","china","russia","iran","israel","ukraine","taiwan","ally","alliance","intelligence","cia","intervention","withdraw","north korea","middle east","gaza","palestine","declare war","invade","invasion","bomb","attack","strike against","war on","war with","regime change"], con: ["sanction","strong against","support israel","defend taiwan","increase aid to israel","confront china","confront russia","declare war","invade","bomb","attack iran","war on iran","war with iran","strike against iran","regime change"], lib: ["diplomacy","negotiate","withdraw","end aid","reduce intervention","peace","ceasefire"] },
   civil_liberties: { keys: ["privacy","surveillance","freedom","liberty","rights","constitution","first amendment","free speech","censor","warrant","patriot act","fisa","nsa"], con: ["protect speech","anti-censor","religious liberty","parental right"], lib: ["privacy","end surveillance","protect rights","voting rights","civil rights","anti-discriminat"] },
   labor_unions: { keys: ["labor","union","worker","wage","minimum wage","overtime","strike","collective bargain","gig economy","right to work","osha","workplace"], con: ["right to work","deregulat","reduce union","lower minimum"], lib: ["raise wage","minimum wage","pro-union","protect worker","collective bargain","paid leave","gig worker protect"] },
 };
@@ -434,58 +542,101 @@ const CONST_KEYWORDS = {
   equal_protection_discrimination: { keys: ["equal protection","discriminat","14th amendment","civil right","affirm action","disparate"], con: ["merit-based","end affirm action","equal treatment"], lib: ["anti-discriminat","affirm action","equity","protect minority"] },
 };
 
+const scoreKeywords = (input, keywordMap, weightStep, maxWeight) => {
+  const weights = {}, positions = {};
+  for (const [issue, { keys, con, lib }] of Object.entries(keywordMap)) {
+    let weight = 0;
+    for (const keyword of keys) { if (input.includes(keyword)) weight += weightStep; }
+    weight = Math.min(weight, maxWeight);
+    if (weight < 0.1) continue;
+    weights[issue] = +weight.toFixed(2);
+    let conMatches = 0, libMatches = 0;
+    for (const keyword of con) { if (input.includes(keyword)) conMatches++; }
+    for (const keyword of lib) { if (input.includes(keyword)) libMatches++; }
+    const totalMatches = conMatches + libMatches;
+    positions[issue] = +(totalMatches === 0 ? 0.5 : 0.15 + (conMatches / totalMatches) * 0.7).toFixed(2);
+  }
+  return { weights, positions };
+};
+
+const LEAN_THRESHOLD_RIGHT = 0.6;
+const LEAN_THRESHOLD_LEFT = 0.4;
+const BILL_NAME_MAX_WORDS = 6;
+
+// Detect absurd, violent, or unconstitutional bill proposals
+const ABSURD_PATTERNS = [
+  /\b(kill|murder|execute|exterminate|genocide|slaughter|massacre|eliminate|eradicate|purge|destroy)\b.*\b(all|every|citizen|people|american|population|human|person|baby|babies|infant|child|children|everyone|men|women)\b/,
+  /\b(ban|outlaw|prohibit|criminalize)\b.*\b(all|every|citizen|people|living|breathing|existing|life|freedom|rights)\b/,
+  /\b(nuke|nuclear bomb|nuclear strike|nuke the)\b/,
+  /\bdeclare war on\b/,
+  /\binvade iran\b/,
+  /\bwar (on|with) iran\b/,
+  /\bbomb iran\b/,
+  /\battack iran\b/,
+];
+
 function analyzeBillText(text) {
-  const t = text.toLowerCase();
-  const issueWeights = {}, issuePositions = {};
+  const normalized = text.toLowerCase();
+
+  // Check for absurd/violent/extreme proposals
+  const isAbsurd = ABSURD_PATTERNS.some(pat => pat.test(normalized));
+
+  const issues = scoreKeywords(normalized, BILL_KEYWORDS, 0.3, 0.95);
+  const constitutional = scoreKeywords(normalized, CONST_KEYWORDS, 0.35, 0.9);
+
+  if (isAbsurd) {
+    // Force high controversy + constitutional crisis — almost no one votes yes
+    issues.weights.civil_liberties = 0.95;
+    issues.positions.civil_liberties = 0.95;
+    issues.weights.criminal_justice = 0.9;
+    issues.positions.criminal_justice = 0.95;
+    if (normalized.includes("iran") || normalized.includes("war") || normalized.includes("invade") || normalized.includes("bomb")) {
+      issues.weights.foreign_policy_hawks = 0.95;
+      issues.positions.foreign_policy_hawks = 0.95;
+      issues.weights.defense_military = 0.9;
+      issues.positions.defense_military = 0.85;
+    }
+    constitutional.weights.individual_rights_vs_government = 0.95;
+    constitutional.positions.individual_rights_vs_government = 0.95;
+    constitutional.weights.executive_power = 0.8;
+    constitutional.positions.executive_power = 0.9;
+  }
+
+  if (Object.keys(issues.weights).length === 0) {
+    issues.weights.government_spending = 0.6;
+    issues.positions.government_spending = 0.5;
+    issues.weights.civil_liberties = 0.7;
+    issues.positions.civil_liberties = 0.5;
+    issues.weights.criminal_justice = 0.5;
+    issues.positions.criminal_justice = 0.5;
+    constitutional.weights.individual_rights_vs_government = 0.6;
+    constitutional.positions.individual_rights_vs_government = 0.5;
+  }
+
   let totalWeight = 0, weightedLean = 0;
-
-  for (const [issue, { keys, con, lib }] of Object.entries(BILL_KEYWORDS)) {
-    let weight = 0;
-    for (const k of keys) { if (t.includes(k)) weight += 0.3; }
-    weight = Math.min(weight, 0.95);
-    if (weight < 0.1) continue;
-    issueWeights[issue] = +weight.toFixed(2);
-    let conScore = 0, libScore = 0;
-    for (const k of con) { if (t.includes(k)) conScore++; }
-    for (const k of lib) { if (t.includes(k)) libScore++; }
-    const total = conScore + libScore;
-    const pos = total === 0 ? 0.5 : 0.15 + (conScore / total) * 0.7;
-    issuePositions[issue] = +pos.toFixed(2);
+  for (const [issue, weight] of Object.entries(issues.weights)) {
     totalWeight += weight;
-    weightedLean += weight * pos;
+    weightedLean += weight * issues.positions[issue];
   }
 
-  const constitutionalIssues = {}, constitutionalPosition = {};
-  for (const [issue, { keys, con, lib }] of Object.entries(CONST_KEYWORDS)) {
-    let weight = 0;
-    for (const k of keys) { if (t.includes(k)) weight += 0.35; }
-    weight = Math.min(weight, 0.9);
-    if (weight < 0.1) continue;
-    constitutionalIssues[issue] = +weight.toFixed(2);
-    let conScore = 0, libScore = 0;
-    for (const k of con) { if (t.includes(k)) conScore++; }
-    for (const k of lib) { if (t.includes(k)) libScore++; }
-    const total = conScore + libScore;
-    constitutionalPosition[issue] = +(total === 0 ? 0.5 : 0.15 + (conScore / total) * 0.7).toFixed(2);
-  }
+  const averageLean = totalWeight > 0 ? weightedLean / totalWeight : 0.5;
+  let partySupport, lean;
+  if (averageLean > LEAN_THRESHOLD_RIGHT) { partySupport = "R"; lean = "right"; }
+  else if (averageLean < LEAN_THRESHOLD_LEFT) { partySupport = "D"; lean = "left"; }
+  else { partySupport = "bipartisan"; lean = "center"; }
 
-  // If nothing matched, give a generic center bill
-  if (Object.keys(issueWeights).length === 0) {
-    issueWeights.government_spending = 0.5;
-    issuePositions.government_spending = 0.5;
-    issueWeights.civil_liberties = 0.3;
-    issuePositions.civil_liberties = 0.5;
-  }
+  const words = text.trim().split(/\s+/).slice(0, BILL_NAME_MAX_WORDS)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  const name = words.join(" ") + " Act";
 
-  const avgLean = totalWeight > 0 ? weightedLean / totalWeight : 0.5;
-  const partySupport = avgLean > 0.6 ? "R" : avgLean < 0.4 ? "D" : "bipartisan";
-  const lean = partySupport === "R" ? "right" : partySupport === "D" ? "left" : "center";
+  // Revenue-raising bills must originate in the House (Art. I §7)
+  const revenueKeywords = ["tax","taxes","taxation","revenue","tariff","duty","irs","income tax","sales tax","excise","levy","fee increase"];
+  const isRevenue = revenueKeywords.some(k => normalized.includes(k));
+  const startChamber = isRevenue ? "hou" : (Math.random() < 0.5 ? "hou" : "sen");
 
-  // Generate a name from the text
-  const words = text.trim().split(/\s+/).slice(0, 6).map((w, i) => i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w);
-  const name = words.join(" ") + (words.length < text.trim().split(/\s+/).length ? " Act" : " Act");
+  const controversy_level = isAbsurd ? 0.98 : (Math.abs(averageLean - 0.5) > 0.25 ? 0.7 : 0.4);
 
-  return { name, lean, partySupport, issueWeights, issuePositions, constitutionalIssues, constitutionalPosition };
+  return { name, lean, partySupport, startChamber, controversy_level, issueWeights: issues.weights, issuePositions: issues.positions, constitutionalIssues: constitutional.weights, constitutionalPosition: constitutional.positions };
 }
 
 // ─── RESPONSIVE HOOKS ───
@@ -518,8 +669,15 @@ export default function GovSim() {
 
   // Custom bill state
   const [customBill, setCustomBill] = useState("");
-  const [analyzing, setAnalyzing] = useState(false);
-  const [apiError, setApiError] = useState(null);
+
+  // API key state (persisted in localStorage)
+  const [apiKey, setApiKey] = useState("");
+  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
+  const [keyDraft, setKeyDraft] = useState("");
+  useEffect(() => {
+    const stored = localStorage.getItem("anthropic_key");
+    if (stored) setApiKey(stored);
+  }, []);
 
   // Derive state from playhead
   const snap = useMemo(() => {
@@ -642,16 +800,40 @@ export default function GovSim() {
     return so.map(s => ({ label: lb[s.val] || "", start: s.start / timeline.duration, end: s.end / timeline.duration, mid: ((s.start + s.end) / 2) / timeline.duration }));
   }, [timeline]);
 
-  const go = useCallback(policy => { setPol(policy); setTimeline(buildTimeline(policy)); setPlayhead(0); setPlaying(true); }, []);
-  const reset = () => { setTimeline(null); setPol(null); setPlayhead(0); setPlaying(false); };
+  const go = useCallback(policy => { setPol(policy); setTimeline(buildTimeline(policy)); setPlayhead(0); setPlaying(true); setAnalyzing(false); }, []);
+  const reset = () => { setTimeline(null); setPol(null); setPlayhead(0); setPlaying(false); setAnalyzing(false); };
   const replay = () => { setPlayhead(0); setPlaying(true); cur.current = VIEWS.idle; };
 
-  // Custom bill analyzer
-  const analyzeBill = useCallback((text) => {
+  // Custom bill analyzer — Haiku when API key available, keyword fallback otherwise
+  const [analyzing, setAnalyzing] = useState(false);
+  const analyzeStartTime = useRef(0);
+  const analyzeBill = useCallback(async (text) => {
     if (!text.trim()) return;
-    const bill = analyzeBillText(text);
-    go(bill);
-  }, [go]);
+    if (!apiKey) {
+      go(analyzeBillText(text));
+      return;
+    }
+    // Optimistic: immediately show the visualization with dots popping in
+    setAnalyzing(true);
+    analyzeStartTime.current = Date.now();
+    setPol({ name: text.trim().split(/\s+/).slice(0, 6).map((w, i) => i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w).join(" ") + " Act" });
+    setTimeline(null); // hide hero, show SVG, but no timeline yet
+    try {
+      const res = await fetch("/api/analyze-bill", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, apiKey }) });
+      if (!res.ok) throw new Error("API error");
+      const bill = await res.json();
+      const minWait = 2500;
+      const elapsed = Date.now() - analyzeStartTime.current;
+      if (elapsed < minWait) await new Promise(r => setTimeout(r, minWait - elapsed));
+      go(bill);
+    } catch {
+      const bill = analyzeBillText(text);
+      const minWait = 2500;
+      const elapsed = Date.now() - analyzeStartTime.current;
+      if (elapsed < minWait) await new Promise(r => setTimeout(r, minWait - elapsed));
+      go(bill);
+    }
+  }, [go, apiKey]);
 
   const partyColor = p => p === "R" ? C.rep : p === "D" ? C.dem : C.ind;
   const nc = m => { const v = snap.rv[m.id]; if (v === "skip") return C.borderLight; if (v === true) return C.yea; if (v === false) return C.nay; return partyColor(m.p); };
@@ -672,12 +854,10 @@ export default function GovSim() {
   const pct = timeline ? Math.min(1, playhead / timeline.duration) : 0;
   const isActive = snap.stage !== "idle" && snap.stage !== "done";
 
-  const cardStyle = { background: C.card, border: `1px solid ${C.border}`, borderRadius: R.lg, boxShadow: S.md };
-
   return (
     <div onMouseMove={e => setMp({ x: e.clientX, y: e.clientY })} onClick={e => { if (mob && hov && !e.target.closest("g")) setHov(null); }}
       style={{ width: "100%", height: "100dvh", overflow: "hidden", position: "relative", background: C.bg, fontFamily: SERIF, color: C.text, touchAction: "manipulation" }}>
-      <style>{`@keyframes shimmer{0%,100%{background-position:200% 0}50%{background-position:-200% 0}}`}</style>
+      {/* Animations and hover styles are in globals.css */}
       {/* Texture */}
       <div style={{ position: "absolute", inset: 0, opacity: .02, pointerEvents: "none", backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`, backgroundSize: "256px" }} />
 
@@ -688,16 +868,19 @@ export default function GovSim() {
         <text x="700" y="135" textAnchor="middle" style={{ fontSize: 14, fill: C.textMid, letterSpacing: 4, fontFamily: SANS, fontWeight: 700 }}>EXECUTIVE</text>
         <text x="1050" y="190" textAnchor="middle" style={{ fontSize: 14, fill: C.textMid, letterSpacing: 4, fontFamily: SANS, fontWeight: 700 }}>SUPREME COURT</text>
 
-        {all.map(m => {
+        {all.map((m, idx) => {
           const p = positions[m.id]; if (!p) return null;
-          const r = nr(m), c = nc(m), isH = hov?.id === m.id, revealed = snap.rv[m.id] !== undefined, scale = revealed ? 1.3 : 1;
+          const r = nr(m), c = nc(m), isH = hov?.id === m.id, revealed = snap.rv[m.id] !== undefined;
+          const notable = NOTABLE.has(m.n);
           return (
             <g key={m.id} style={{ cursor: "pointer" }}>
+              {notable && <circle cx={p.x} cy={p.y} r={r + 3} fill="none" stroke={c} strokeWidth={1.5} opacity={0.6} className="gs-notable-ring" />}
               {isH && <circle cx={p.x} cy={p.y} r={r * 3} fill={c} opacity={.12} />}
               {mob && <circle cx={p.x} cy={p.y} r={Math.max(r * 1.8, 10)} fill="transparent"
                 onPointerDown={e => { e.stopPropagation(); setMp({ x: e.clientX, y: e.clientY }); setHov(hov?.id === m.id ? null : m); }} />}
-              <circle cx={p.x} cy={p.y} r={r * scale} fill={c} opacity={isH ? 1 : .85} stroke={isH ? C.text : "none"} strokeWidth={1}
-                style={{ transition: "fill 0.2s" }}
+              <circle cx={p.x} cy={p.y} r={r} fill={c} opacity={isH ? 1 : notable ? 1 : .85} stroke={isH ? C.text : "none"} strokeWidth={1}
+                className={`gs-member-circle${analyzing ? " gs-dot-pop-in" : ""}`}
+                style={{ transform: `scale(${revealed ? 1.3 : 1})`, transformOrigin: `${p.x}px ${p.y}px`, ...(analyzing ? { animationDelay: `${500 + idx * 8}ms` } : {}) }}
                 onMouseEnter={() => { if (!mob) setHov(m); }} onMouseLeave={() => { if (!mob) setHov(null); }} />
             </g>
           );
@@ -714,15 +897,22 @@ export default function GovSim() {
         <div>
           <div style={{ fontSize: mob ? 8 : 11, letterSpacing: mob ? 1 : 3, textTransform: "uppercase", color: C.textMute, fontFamily: SANS, fontWeight: 500 }}>PolicySim: U.S. Federal Policy Simulator</div>
           {pol && <div style={{ marginTop: 2, display: "flex", alignItems: "baseline", gap: mob ? 6 : 10, flexWrap: "wrap" }}>
-            <span style={{ fontSize: mob ? 10 : 12, fontFamily: SANS, fontWeight: 600, letterSpacing: mob ? 1 : 2, textTransform: "uppercase", color: C.textMute, background: `linear-gradient(90deg,${C.textMute},${C.text},${C.textMute})`, backgroundSize: "200% 100%", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", animation: "shimmer 2.5s ease-in-out infinite" }}>Now voting on:</span>
+            <span style={{ fontSize: mob ? 10 : 12, fontFamily: SANS, fontWeight: 600, letterSpacing: mob ? 1 : 2, textTransform: "uppercase", color: C.textMute, background: `linear-gradient(90deg,${C.textMute},${C.text},${C.textMute})`, backgroundSize: "200% 100%", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", animation: "var(--animate-shimmer)" }}>{analyzing ? "Analyzing bill\u2026" : "Now voting on:"}</span>
             <span style={{ fontSize: mob ? 16 : 22, fontWeight: 400, color: C.text }}>{pol.name}</span>
           </div>}
         </div>
         {pol && (() => {
           const hasOverride = snap.pR && !snap.pR.signed;
-          const stages = hasOverride ? ["hou", "sen", "exc", "hou_override", "sen_override", "sct"] : ["hou", "sen", "exc", "sct"];
-          const labelsM = hasOverride ? ["H", "S", "P", "H\u00B2", "S\u00B2", "C"] : ["H", "S", "P", "C"];
-          const labelsD = hasOverride ? ["House", "Senate", "President", "H Override", "S Override", "Court"] : ["House", "Senate", "President", "Court"];
+          const senFirst = timeline?.startChamber === "sen";
+          const stages = hasOverride
+            ? (senFirst ? ["sen", "hou", "exc", "hou_override", "sen_override", "sct"] : ["hou", "sen", "exc", "hou_override", "sen_override", "sct"])
+            : (senFirst ? ["sen", "hou", "exc", "sct"] : ["hou", "sen", "exc", "sct"]);
+          const labelsM = hasOverride
+            ? (senFirst ? ["S", "H", "P", "H\u00B2", "S\u00B2", "C"] : ["H", "S", "P", "H\u00B2", "S\u00B2", "C"])
+            : (senFirst ? ["S", "H", "P", "C"] : ["H", "S", "P", "C"]);
+          const labelsD = hasOverride
+            ? (senFirst ? ["Senate", "House", "President", "H Override", "S Override", "Court"] : ["House", "Senate", "President", "H Override", "S Override", "Court"])
+            : (senFirst ? ["Senate", "House", "President", "Court"] : ["House", "Senate", "President", "Court"]);
           const labels = mob ? labelsM : labelsD;
           return <div style={{ display: "flex", gap: mob ? 6 : 10, flexWrap: "wrap" }}>
             {stages.map((s, i) => {
@@ -730,7 +920,7 @@ export default function GovSim() {
               const act = snap.stage === s;
               return (
                 <div key={s} style={{ display: "flex", alignItems: "center", gap: mob ? 3 : 5 }}>
-                  <div style={{ width: mob ? 6 : 8, height: mob ? 6 : 8, borderRadius: "50%", background: act ? C.rep : done ? C.yea : C.border, boxShadow: act ? `0 0 8px ${C.rep}66` : "none" }} />
+                  <div className="gs-stage-dot" style={{ width: mob ? 6 : 8, height: mob ? 6 : 8, borderRadius: "50%", background: act ? C.rep : done ? C.yea : C.border, boxShadow: act ? `0 0 8px ${C.rep}66` : "none" }} />
                   <span style={{ fontSize: mob ? 10 : 13, fontFamily: SANS, color: act ? C.text : done ? C.yeaMute : C.textMute, fontWeight: act ? 700 : 400 }}>{labels[i]}</span>
                   {i < stages.length - 1 && <span style={{ color: C.border, fontSize: mob ? 9 : 11 }}>{"\u2192"}</span>}
                 </div>
@@ -741,39 +931,39 @@ export default function GovSim() {
       </div>
 
       {/* ─── Continue prompt ─── */}
-      {snap.paused && !playing && <div style={{ position: "absolute", bottom: mob ? 64 : 68, left: "50%", transform: "translateX(-50%)", textAlign: "center", zIndex: 20, ...cardStyle, padding: mob ? "12px 18px" : "16px 32px", maxWidth: mob ? "90vw" : "none" }}>
+      {snap.paused && !playing && <Card style={{ position: "absolute", bottom: mob ? 64 : 68, left: "50%", transform: "translateX(-50%)", textAlign: "center", zIndex: 20, padding: mob ? "12px 18px" : "16px 32px", maxWidth: mob ? "90vw" : "none", animation: "var(--animate-fade-in-up)" }}>
         <div style={{ fontSize: mob ? 11 : 13, color: C.textMute, fontFamily: SANS, fontWeight: 500, marginBottom: mob ? 6 : 10 }}>
-          {snap.ovr ? `${snap.ovr.chamber} override ${snap.ovr.ok ? "passed" : "failed"} ${snap.ovr.y}\u2013${snap.ovr.n}` : snap.hR && !snap.sR ? `House ${snap.hR.ok ? "passed" : "failed"} ${snap.hR.y}\u2013${snap.hR.n}` : snap.sR && !snap.pR ? `Senate ${snap.sR.ok ? "passed" : "failed"} ${snap.sR.y}\u2013${snap.sR.n}` : snap.pR ? `President ${snap.pR.signed ? "signed" : "vetoed"}` : ""}
+          {snap.ovr ? `${snap.ovr.chamber} override ${snap.ovr.ok ? "passed" : "failed"} ${snap.ovr.y}\u2013${snap.ovr.n}` : snap.pR ? `President ${snap.pR.signed ? "signed" : "vetoed"}` : snap.hR && snap.sR ? `${timeline?.startChamber === "sen" ? "House" : "Senate"} ${(timeline?.startChamber === "sen" ? snap.hR : snap.sR).ok ? "passed" : "failed"} ${(timeline?.startChamber === "sen" ? snap.hR : snap.sR).y}\u2013${(timeline?.startChamber === "sen" ? snap.hR : snap.sR).n}` : snap.hR ? `House ${snap.hR.ok ? "passed" : "failed"} ${snap.hR.y}\u2013${snap.hR.n}` : snap.sR ? `Senate ${snap.sR.ok ? "passed" : "failed"} ${snap.sR.y}\u2013${snap.sR.n}` : ""}
         </div>
-        <div onClick={() => { setPlaying(true); setPlayhead(p => p + 150); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: mob ? "8px 18px" : "10px 28px", borderRadius: R.md, background: C.bar, color: C.bg, cursor: "pointer", fontSize: mob ? 12 : 14, fontFamily: SANS, fontWeight: 600, pointerEvents: "auto" }}>
+        <Button variant="primary" size={mob ? "md" : "lg"} onClick={() => { setPlaying(true); setPlayhead(p => p + 150); }} style={{ pointerEvents: "auto", padding: mob ? "8px 18px" : "10px 28px", fontSize: mob ? 12 : 14 }}>
           Continue to {snap.paused.next}<span style={{ fontSize: mob ? 13 : 16 }}>{"\u2192"}</span>
-        </div>
-      </div>}
+        </Button>
+      </Card>}
 
       {/* ─── Live counter ─── */}
       {isActive && !snap.out && !(snap.paused && !playing) && (snap.stage === "hou" || snap.stage === "sen" || snap.stage === "sct" || snap.stage === "hou_override" || snap.stage === "sen_override") && (snap.cy > 0 || snap.cn > 0) &&
-        <div style={{ position: "absolute", bottom: mob ? 64 : 68, left: "50%", transform: "translateX(-50%)", display: "flex", gap: mob ? 20 : 36, alignItems: "baseline", zIndex: 10, ...cardStyle, padding: mob ? "10px 24px" : "14px 40px" }}>
+        <Card style={{ position: "absolute", bottom: mob ? 64 : 68, left: "50%", transform: "translateX(-50%)", display: "flex", gap: mob ? 20 : 36, alignItems: "baseline", zIndex: 10, padding: mob ? "10px 24px" : "14px 40px", animation: "var(--animate-counter-in)" }}>
           <div style={{ textAlign: "center" }}><div style={{ fontSize: mob ? 32 : 48, fontWeight: 300, color: C.yea, lineHeight: 1, fontFamily: SANS }}>{snap.cy}</div><div style={{ fontSize: mob ? 10 : 12, color: C.yeaMute, fontFamily: SANS, fontWeight: 600, letterSpacing: 2, marginTop: 2 }}>YEA</div></div>
           <div style={{ width: 1, height: mob ? 32 : 48, background: C.border }} />
           <div style={{ textAlign: "center" }}><div style={{ fontSize: mob ? 32 : 48, fontWeight: 300, color: C.nay, lineHeight: 1, fontFamily: SANS }}>{snap.cn}</div><div style={{ fontSize: mob ? 10 : 12, color: C.nayMute, fontFamily: SANS, fontWeight: 600, letterSpacing: 2, marginTop: 2 }}>NAY</div></div>
-        </div>}
+        </Card>}
 
       {/* ─── Presidential decision ─── */}
       {snap.pR && snap.stage === "exc" && !snap.out && !(snap.paused && !playing) &&
-        <div style={{ position: "absolute", bottom: mob ? 64 : 68, left: "50%", transform: "translateX(-50%)", textAlign: "center", zIndex: 10, maxWidth: mob ? "90vw" : "none" }}>
-          <div style={{ background: C.card, borderRadius: R.lg, padding: mob ? "14px 28px" : "18px 44px", boxShadow: S.lg, border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: mob ? 10 : 11, fontFamily: SANS, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: C.textMute, marginBottom: 4 }}>Presidential Action</div>
-            <div style={{ fontSize: mob ? 20 : 28, fontWeight: 600, fontFamily: SANS, color: snap.pR.signed ? C.yea : C.nay }}>{snap.pR.signed ? "Signed Into Law" : "Vetoed"}</div>
-          </div>
+        <div style={{ position: "absolute", bottom: mob ? 64 : 68, left: "50%", transform: "translateX(-50%)", textAlign: "center", zIndex: 10, maxWidth: mob ? "90vw" : "none", animation: "var(--animate-fade-in-up)" }}>
+          <Card className="shadow-[var(--shadow-lg)]" style={{ padding: mob ? "14px 28px" : "18px 44px" }}>
+            <CardTitle style={{ marginBottom: 4, fontSize: mob ? 10 : 11 }}>Presidential Action</CardTitle>
+            <CardContent style={{ fontSize: mob ? 20 : 28, fontWeight: 600, fontFamily: SANS, color: snap.pR.signed ? C.yea : C.nay }}>{snap.pR.signed ? "Signed Into Law" : "Vetoed"}</CardContent>
+          </Card>
         </div>}
 
       {/* ─── No judicial review ─── */}
       {snap.cR && !snap.cR.ch && snap.stage === "sct" && !snap.out && !(snap.paused && !playing) &&
-        <div style={{ position: "absolute", bottom: mob ? 64 : 68, left: "50%", transform: "translateX(-50%)", textAlign: "center", zIndex: 10, maxWidth: mob ? "90vw" : "none" }}>
-          <div style={{ background: C.card, borderRadius: R.lg, padding: mob ? "14px 28px" : "18px 44px", boxShadow: S.lg, border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: mob ? 10 : 11, fontFamily: SANS, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: C.textMute, marginBottom: 4 }}>Supreme Court</div>
-            <div style={{ fontSize: mob ? 18 : 24, fontWeight: 600, fontFamily: SANS, color: C.textMid }}>No Judicial Challenge</div>
-          </div>
+        <div style={{ position: "absolute", bottom: mob ? 64 : 68, left: "50%", transform: "translateX(-50%)", textAlign: "center", zIndex: 10, maxWidth: mob ? "90vw" : "none", animation: "var(--animate-fade-in-up)" }}>
+          <Card className="shadow-[var(--shadow-lg)]" style={{ padding: mob ? "14px 28px" : "18px 44px" }}>
+            <CardTitle style={{ marginBottom: 4, fontSize: mob ? 10 : 11 }}>Supreme Court</CardTitle>
+            <CardContent style={{ fontSize: mob ? 18 : 24, fontWeight: 600, fontFamily: SANS, color: C.textMid }}>No Judicial Challenge</CardContent>
+          </Card>
         </div>}
 
       {/* ─── Outcome ─── */}
@@ -781,48 +971,98 @@ export default function GovSim() {
         const won = snap.out.s === "Enacted";
         const label = { Enacted: "Law Enacted", Defeated: `Defeated in the ${snap.out.w}`, Vetoed: "Veto Sustained", Unconstitutional: "Ruled Unconstitutional" }[snap.out.s];
         const accent = won ? C.yea : C.nay;
-        return <div style={{ position: "absolute", bottom: mob ? 64 : 68, left: "50%", transform: "translateX(-50%)", textAlign: "center", zIndex: 20, maxWidth: mob ? "90vw" : "none" }}>
-          <div style={{ background: C.card, borderRadius: R.lg, padding: mob ? "16px 28px" : "22px 52px", boxShadow: S.lg, border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: mob ? 10 : 11, fontFamily: SANS, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: C.textMute, marginBottom: 6 }}>Final Result</div>
-            <div style={{ fontSize: mob ? 22 : 34, fontWeight: 600, fontFamily: SANS, color: accent, lineHeight: 1.1 }}>{label}</div>
+        return <div style={{ position: "absolute", bottom: mob ? 64 : 68, left: "50%", transform: "translateX(-50%)", textAlign: "center", zIndex: 20, maxWidth: mob ? "90vw" : "none", animation: "var(--animate-fade-in-up)" }}>
+          <Card className="shadow-[var(--shadow-lg)]" style={{ padding: mob ? "16px 28px" : "22px 52px" }}>
+            <CardTitle style={{ marginBottom: 6, fontSize: mob ? 10 : 11 }}>Final Result</CardTitle>
+            <CardContent style={{ fontSize: mob ? 22 : 34, fontWeight: 600, fontFamily: SANS, color: accent, lineHeight: 1.1 }}>{label}</CardContent>
             <div style={{ marginTop: mob ? 8 : 10, display: "flex", gap: 8, justifyContent: "center" }}>
-              <button onClick={() => { reset(); }} onMouseEnter={e => { e.target.style.color = C.bg; e.target.style.background = C.bar; e.target.style.borderColor = C.bar; }} onMouseLeave={e => { e.target.style.color = C.textMid; e.target.style.background = "transparent"; e.target.style.borderColor = C.border; }} style={{ padding: mob ? "7px 16px" : "8px 20px", borderRadius: R.md, border: `1px solid ${C.border}`, background: "transparent", color: C.textMid, fontFamily: SANS, fontWeight: 500, fontSize: mob ? 11 : 12, cursor: "pointer", letterSpacing: 0, transition: "all .2s" }}>Try a new bill</button>
-              <button onClick={() => { setPlayhead(0); setPlaying(true); }} onMouseEnter={e => { e.target.style.color = C.bg; e.target.style.background = C.bar; e.target.style.borderColor = C.bar; }} onMouseLeave={e => { e.target.style.color = C.textMid; e.target.style.background = "transparent"; e.target.style.borderColor = C.border; }} style={{ padding: mob ? "7px 16px" : "8px 20px", borderRadius: R.md, border: `1px solid ${C.border}`, background: "transparent", color: C.textMid, fontFamily: SANS, fontWeight: 500, fontSize: mob ? 11 : 12, cursor: "pointer", letterSpacing: 0, transition: "all .2s" }}>Replay</button>
+              <Button variant="ghost" size={mob ? "sm" : "md"} onClick={() => { reset(); }} style={{ padding: mob ? "7px 16px" : "8px 20px", fontSize: mob ? 11 : 12, fontWeight: 500, letterSpacing: 0 }}>Try a new bill</Button>
+              <Button variant="ghost" size={mob ? "sm" : "md"} onClick={() => { setPlayhead(0); setPlaying(true); }} style={{ padding: mob ? "7px 16px" : "8px 20px", fontSize: mob ? 11 : 12, fontWeight: 500, letterSpacing: 0 }}>Replay</Button>
             </div>
-          </div>
+          </Card>
         </div>;
       })()}
 
       {/* ─── Hero / idle ─── */}
-      {!timeline && <div style={{ position: "absolute", inset: 0, zIndex: 20, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: C.bg, padding: mob ? "20px 16px" : "0", overflow: "auto" }}>
+      {!timeline && <div style={{ position: "absolute", inset: 0, zIndex: 20, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: C.bg, padding: mob ? "20px 16px" : "0", overflow: "auto", animation: "var(--animate-hero-in)", transition: "opacity 1s ease-in-out", opacity: analyzing ? 0 : 1, pointerEvents: analyzing ? "none" : "auto" }}>
         <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
           {[{ x: "8%", y: "18%", s: 80, c: C.rep, o: .06 }, { x: "85%", y: "22%", s: 60, c: C.dem, o: .06 }, { x: "15%", y: "75%", s: 50, c: C.dem, o: .05 }, { x: "78%", y: "70%", s: 70, c: C.rep, o: .05 }, { x: "50%", y: "12%", s: 40, c: C.textMute, o: .04 }, { x: "92%", y: "50%", s: 45, c: C.rep, o: .04 }, { x: "5%", y: "48%", s: 55, c: C.dem, o: .04 }].map((d, i) =>
             <div key={i} style={{ position: "absolute", left: d.x, top: d.y, width: mob ? d.s * .6 : d.s, height: mob ? d.s * .6 : d.s, borderRadius: "50%", background: d.c, opacity: d.o, transform: "translate(-50%,-50%)" }} />)}
         </div>
-        <div style={{ textAlign: "center", marginBottom: mob ? 16 : 28, position: "relative" }}>
-          <div style={{ fontSize: mob ? 10 : 12, letterSpacing: mob ? 3 : 6, textTransform: "uppercase", color: C.textMute, fontFamily: SANS, fontWeight: 600, marginBottom: mob ? 6 : 10 }}>U.S. Federal Government</div>
-          <h1 style={{ fontSize: sm ? 32 : mob ? 40 : 56, fontWeight: 300, color: C.text, lineHeight: 1, margin: 0, letterSpacing: -1.5 }}>Policy Simulator</h1>
+        <div style={{ textAlign: "center", marginBottom: mob ? 16 : 28, position: "relative", animation: "var(--animate-slide-up)" }}>
+          <div style={{ fontSize: mob ? 10 : 12, letterSpacing: mob ? 3 : 6, textTransform: "uppercase", color: C.textMute, fontFamily: SANS, fontWeight: 600, marginBottom: mob ? 6 : 10 }}>U.S. Federal Government Simulator</div>
+          <h1 style={{ fontSize: sm ? 32 : mob ? 40 : 56, fontWeight: 300, color: C.text, lineHeight: 1, margin: 0, letterSpacing: -1.5 }}>PolicySim</h1>
           <div style={{ fontSize: mob ? 12 : 14, color: C.textMute, marginTop: mob ? 8 : 12, fontFamily: SANS, fontWeight: 400, letterSpacing: 1 }}>Senate {"\u00B7"} House {"\u00B7"} Executive {"\u00B7"} Supreme Court</div>
         </div>
-        <div style={{ position: "relative", width: mob ? "100%" : 400, maxWidth: 400 }}>
+        <div style={{ position: "relative", width: mob ? "100%" : 400, maxWidth: 400, animation: "var(--animate-slide-up)", animationDelay: "80ms", animationFillMode: "backwards" }}>
           {/* Custom bill input */}
-          <div style={{ background: C.card, borderRadius: R.lg, boxShadow: `${S.sm}, ${S.md}`, border: `1px solid ${C.border}`, padding: mob ? "14px 16px" : "16px 20px", marginBottom: mob ? 12 : 16 }}>
-            <div style={{ fontSize: mob ? 10 : 11, color: C.textMute, fontFamily: SANS, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>Describe your own bill</div>
+          <Card className="shadow-[var(--shadow-sm),var(--shadow-md)]" style={{ padding: mob ? "14px 16px" : "16px 20px", marginBottom: mob ? 12 : 16 }}>
+            <CardTitle style={{ marginBottom: 10, fontSize: mob ? 10 : 11 }}>Describe your own bill</CardTitle>
             <div style={{ display: "flex", gap: 8 }}>
-              <input
+              <Input
                 type="text" value={customBill} onChange={e => setCustomBill(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") analyzeBill(customBill); }}
                 placeholder={mob ? "e.g. Ban TikTok..." : "e.g. Ban TikTok nationwide, legalize marijuana..."}
-                style={{ flex: 1, padding: mob ? "8px 10px" : "9px 14px", borderRadius: R.md, border: `1px solid ${C.border}`, background: C.cardAlt, fontFamily: SERIF, fontSize: mob ? 14 : 15, color: C.text, outline: "none", minWidth: 0 }}
+                style={{ padding: mob ? "8px 10px" : "9px 14px", fontSize: mob ? 14 : 15 }}
               />
               <button
-                onClick={() => analyzeBill(customBill)} disabled={!customBill.trim()}
-                style={{ padding: mob ? "8px 14px" : "9px 20px", borderRadius: R.md, border: "none", background: C.bar, color: C.bg, fontFamily: SANS, fontWeight: 600, fontSize: mob ? 12 : 13, cursor: "pointer", whiteSpace: "nowrap", opacity: !customBill.trim() ? 0.5 : 1 }}
+                className="gs-interactive gs-btn-primary"
+                onClick={() => analyzeBill(customBill)} disabled={!customBill.trim() || analyzing}
+                style={{ padding: mob ? "8px 14px" : "9px 20px", borderRadius: R.md, border: "none", background: C.bar, color: C.bg, fontFamily: SANS, fontWeight: 600, fontSize: mob ? 12 : 13, cursor: "pointer", whiteSpace: "nowrap", opacity: (!customBill.trim() || analyzing) ? 0.65 : 1, transition: "opacity 150ms ease-out, transform 150ms ease-out" }}
               >
-                Simulate
+                {analyzing ? "Analyzing…" : "Simulate"}
               </button>
             </div>
-          </div>
+            {/* API key info banner */}
+            <div style={{ marginTop: 8, fontSize: 11, fontFamily: SANS, color: C.textMute }}>
+              {apiKey ? (
+                <span>AI-powered mode {"\u00B7"} <button onClick={() => { setKeyDraft(apiKey); setKeyDialogOpen(true); }} style={{ background: "none", border: "none", padding: 0, color: C.textMid, fontFamily: SANS, fontSize: 11, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}>change key</button></span>
+              ) : (
+                <span>Keyword-only mode — <button onClick={() => { setKeyDraft(""); setKeyDialogOpen(true); }} style={{ background: "none", border: "none", padding: 0, color: C.textMid, fontFamily: SANS, fontSize: 11, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}>Add your API key</button> for AI-powered analysis</span>
+              )}
+            </div>
+          </Card>
+
+          {/* API Key Dialog */}
+          <Dialog open={keyDialogOpen} onOpenChange={setKeyDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>AI-Powered Analysis</DialogTitle>
+                <DialogDescription>
+                  Add your Anthropic API key for smarter bill analysis. Your key is stored only in your browser&apos;s local storage and sent directly to the Anthropic API. This project is{" "}
+                  <a href="https://github.com/isabellereksopuro/ai-gov-simulator" target="_blank" rel="noopener noreferrer" style={{ color: C.textMid, textDecoration: "underline", textUnderlineOffset: 2 }}>open source</a>
+                  {" "}&mdash; we don&apos;t track, log, or store your key on any server.
+                </DialogDescription>
+              </DialogHeader>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <Input
+                  type="password" value={keyDraft} onChange={e => setKeyDraft(e.target.value)}
+                  placeholder="sk-ant-..."
+                  style={{ fontSize: 14, padding: "9px 14px" }}
+                />
+                <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: C.textMid, fontFamily: SANS, textDecoration: "underline", textUnderlineOffset: 2 }}>
+                  Get a key from console.anthropic.com
+                </a>
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
+                  {apiKey && (
+                    <button
+                      onClick={() => { setApiKey(""); localStorage.removeItem("anthropic_key"); setKeyDraft(""); setKeyDialogOpen(false); }}
+                      style={{ padding: "7px 16px", borderRadius: R.md, border: `1px solid ${C.border}`, background: "transparent", color: C.textMid, fontFamily: SANS, fontWeight: 500, fontSize: 12, cursor: "pointer" }}
+                    >
+                      Clear key
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { const k = keyDraft.trim(); if (k) { setApiKey(k); localStorage.setItem("anthropic_key", k); } setKeyDialogOpen(false); }}
+                    disabled={!keyDraft.trim()}
+                    style={{ padding: "7px 20px", borderRadius: R.md, border: "none", background: C.bar, color: C.bg, fontFamily: SANS, fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: keyDraft.trim() ? 1 : 0.5 }}
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* Divider */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: mob ? 12 : 16 }}>
@@ -832,22 +1072,20 @@ export default function GovSim() {
           </div>
 
           {/* Preset policies */}
-          <div style={{ background: C.card, borderRadius: R.lg, overflow: "hidden", boxShadow: `${S.sm}, ${S.lg}`, border: `1px solid ${C.border}` }}>
+          <Card className="shadow-[var(--shadow-sm),var(--shadow-lg)] overflow-hidden !p-0">
             {POLS.map((p, idx) => (
-              <div key={idx} onClick={() => go(p)}
-                style={{ padding: mob ? "10px 16px" : "11px 20px", cursor: "pointer", borderBottom: idx < POLS.length - 1 ? `1px solid ${C.borderLight}` : "none", display: "flex", alignItems: "center", gap: mob ? 8 : 11, transition: "background 0.1s" }}
-                onMouseEnter={e => { if (!mob) e.currentTarget.style.background = C.cardAlt; }}
-                onMouseLeave={e => { if (!mob) e.currentTarget.style.background = "transparent"; }}>
+              <div key={idx} className="gs-preset-item gs-interactive" onClick={() => go(p)}
+                style={{ padding: mob ? "10px 16px" : "11px 20px", cursor: "pointer", borderBottom: idx < POLS.length - 1 ? `1px solid ${C.borderLight}` : "none", display: "flex", alignItems: "center", gap: mob ? 8 : 11 }}>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: p.lean === "right" ? C.rep : p.lean === "left" ? C.dem : C.textMute }} />
                 <span style={{ fontSize: mob ? 14 : 15, fontWeight: 500, color: C.text }}>{p.name}</span>
               </div>
             ))}
-          </div>
+          </Card>
         </div>
       </div>}
 
       {/* ─── Tooltip ─── */}
-      {hov && <div style={mob
+      {hov && <div className="gs-tooltip-content" style={mob
         ? { position: "fixed", left: Math.min(Math.max(mp.x, 80), win.w - 80), top: mp.y - 110, transform: "translateX(-50%)", background: C.card, border: `1px solid ${C.border}`, borderRadius: R.md, padding: "6px 12px", zIndex: 1000, pointerEvents: "none", boxShadow: S.md, maxWidth: "80vw" }
         : { position: "fixed", left: mp.x + 16, top: mp.y - 12, background: C.card, border: `1px solid ${C.border}`, borderRadius: R.md, padding: "8px 14px", zIndex: 1000, pointerEvents: "none", boxShadow: S.md, maxWidth: 280 }}>
         <div style={{ fontSize: mob ? 13 : 15, fontWeight: 600, color: C.text }}>{hov.n}</div>
@@ -862,21 +1100,37 @@ export default function GovSim() {
         {hov.ab && <div style={{ fontSize: 10, color: C.textMute, marginTop: 2, fontFamily: SANS }}>Appointed by {hov.ab}, {hov.y}</div>}
         {hov.judicial_philosophy && <div style={{ fontSize: 10, color: C.textMid, marginTop: 2, fontFamily: SANS }}>{hov.judicial_philosophy.primary}{hov.judicial_philosophy.secondary ? ` / ${hov.judicial_philosophy.secondary}` : ""}</div>}
         {/* Vote result + reason */}
-        {snap.rv[hov.id] !== undefined && <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
+        {snap.rv[hov.id] !== undefined && snap.rv[hov.id] !== "skip" && <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: snap.rv[hov.id] ? C.yea : C.nay, fontFamily: SANS }}>{snap.rv[hov.id] ? "Yea" : "Nay"}</span>
           {pol && (() => {
             const reason = getVoteReason(hov, pol);
             return reason ? <span style={{ fontSize: 10, color: C.textMid, fontFamily: SANS }}>{reason}</span> : null;
           })()}
         </div>}
+        {/* Lobby influence tag */}
+        {pol && snap.rv[hov.id] !== undefined && snap.rv[hov.id] !== "skip" && (() => {
+          const lobby = getLobbyInfluence(hov, pol);
+          if (!lobby) return null;
+          const isStrong = lobby.strength === "Strong";
+          return <div style={{ marginTop: 5 }}>
+            <span style={{ display: "inline-block", fontSize: 9, fontFamily: SANS, fontWeight: 600, letterSpacing: 0.3,
+              padding: "2px 7px", borderRadius: 4,
+              background: isStrong ? "rgba(220,80,60,0.12)" : "rgba(200,160,60,0.12)",
+              color: isStrong ? "#c0392b" : "#b8860b",
+              border: `1px solid ${isStrong ? "rgba(220,80,60,0.25)" : "rgba(200,160,60,0.25)"}`,
+            }}>
+              {lobby.strength} lobby pressure from {lobby.lobbyist || lobby.industry}
+            </span>
+          </div>;
+        })()}
       </div>}
 
       {/* ─── Video bar ─── */}
       {timeline && <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 30, background: C.bar, paddingBottom: mob ? "env(safe-area-inset-bottom, 8px)" : "0" }}>
         <div style={{ padding: mob ? "8px 12px" : "8px 20px", display: "flex", alignItems: "center", gap: mob ? 10 : 14, height: mob ? 40 : 48 }}>
           {/* Play */}
-          <div onClick={() => { if (playhead >= (timeline?.duration || 0)) replay(); else setPlaying(!playing); }}
-            style={{ width: 32, height: 32, borderRadius: "50%", background: C.barKnob, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+          <div className="gs-play-btn gs-interactive touch-target" onClick={() => { if (playhead >= (timeline?.duration || 0)) replay(); else setPlaying(!playing); }}
+            style={{ width: mob ? 44 : 32, height: mob ? 44 : 32, borderRadius: "50%", background: C.barKnob, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, transition: "transform 150ms var(--ease-out)" }}>
             {playing
               ? <svg width="12" height="12" viewBox="0 0 14 14"><rect x="2" y="1" width="3.5" height="12" rx="1" fill={C.bar} /><rect x="8.5" y="1" width="3.5" height="12" rx="1" fill={C.bar} /></svg>
               : <svg width="12" height="12" viewBox="0 0 14 14"><path d="M4 1.5l7.5 5.5L4 12.5z" fill={C.bar} /></svg>}
@@ -893,15 +1147,15 @@ export default function GovSim() {
               </div>
             ))}
             <div style={{ position: "absolute", top: 14, left: 0, right: 0, height: 4, background: "#352e22", borderRadius: 2, zIndex: -1 }} />
-            <div style={{ position: "absolute", top: 14, left: 0, height: 4, borderRadius: 2, width: `${pct * 100}%`, background: C.barFill, zIndex: 1 }} />
-            <div style={{ position: "absolute", top: 10, left: `${pct * 100}%`, transform: "translateX(-50%)", width: 12, height: 12, borderRadius: "50%", background: C.barKnob, boxShadow: "0 1px 4px rgba(0,0,0,.3)", zIndex: 2 }} />
+            <div className="gs-scrubber-fill" style={{ position: "absolute", top: 14, left: 0, height: 4, borderRadius: 2, width: `${pct * 100}%`, background: C.barFill, zIndex: 1 }} />
+            <div className="gs-scrubber-knob" style={{ position: "absolute", top: 10, left: `${pct * 100}%`, transform: "translateX(-50%)", width: 12, height: 12, borderRadius: "50%", background: C.barKnob, boxShadow: "0 1px 4px rgba(0,0,0,.3)", zIndex: 2 }} />
           </div>
           {/* Speed + New */}
           <div style={{ display: "flex", alignItems: "center", gap: mob ? 6 : 8, flexShrink: 0 }}>
             {!sm && <div style={{ display: "flex", gap: 2 }}>
-              {[.5, 1, 2].map(s => <div key={s} onClick={() => setSpeed(s)} style={{ padding: "2px 6px", borderRadius: R.sm, cursor: "pointer", background: speed === s ? C.barKnob : "transparent", color: speed === s ? C.bar : C.barMute, fontSize: 11, fontFamily: SANS, fontWeight: 600 }}>{s}x</div>)}
+              {[.5, 1, 2].map(s => <div key={s} className="gs-speed-btn gs-interactive" onClick={() => setSpeed(s)} style={{ padding: "2px 6px", borderRadius: R.sm, cursor: "pointer", background: speed === s ? C.barKnob : "transparent", color: speed === s ? C.bar : C.barMute, fontSize: 11, fontFamily: SANS, fontWeight: 600, transition: "background 150ms var(--ease-out), color 150ms var(--ease-out)" }}>{s}x</div>)}
             </div>}
-            <div onClick={reset} style={{ padding: "4px 12px", borderRadius: R.sm, cursor: "pointer", border: `1px solid ${C.barMute}`, color: C.barFill, fontSize: 10, fontFamily: SANS, fontWeight: 600 }}>New</div>
+            <Button variant="bar" size="sm" className="touch-target" onClick={reset} style={{ padding: mob ? "8px 14px" : "4px 12px" }}>New</Button>
           </div>
         </div>
       </div>}

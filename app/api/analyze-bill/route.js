@@ -12,6 +12,7 @@ const BILL_SYSTEM_PROMPT = `You are a congressional policy analyst. Given a bill
   "constitutionalPosition": { ... },
   "committees": ["Committee1", "Committee2"],
   "controversy_level": 0.0-1.0,
+  "startChamber": "hou" or "sen",
   "factions": {
     "supporters": "Who supports this and why (one sentence)",
     "opponents": "Who opposes this and why (one sentence)"
@@ -28,16 +29,23 @@ executive_power, individual_rights_vs_government, federal_vs_state_power, regula
 
 constitutionalPosition: what position the bill takes (0.0 = expansive/liberal interpretation, 1.0 = restrictive/conservative interpretation). Only include issues where weight > 0.
 
+startChamber: which chamber the bill originates in. Per Article I Section 7, bills that raise revenue MUST start in "hou" (House). All other bills can start in either chamber — randomly pick "hou" or "sen".
+
 Be precise about which issues a bill actually touches.`;
 
 export async function POST(request) {
   try {
-    const { text } = await request.json();
+    const { text, apiKey: bodyKey } = await request.json();
     if (!text?.trim()) {
       return Response.json({ error: "No bill text provided" }, { status: 400 });
     }
 
-    const client = new Anthropic();
+    const key = bodyKey || process.env.ANTHROPIC_API_KEY;
+    if (!key) {
+      return Response.json({ error: "No API key provided" }, { status: 400 });
+    }
+
+    const client = new Anthropic({ apiKey: key });
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 1500,
@@ -45,10 +53,14 @@ export async function POST(request) {
       messages: [{ role: "user", content: text }],
     });
 
-    const billText = response.content[0].text;
+    const raw = response.content[0].text;
+    const billText = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
     const bill = JSON.parse(billText);
     return Response.json(bill);
   } catch (e) {
-    return Response.json({ error: "Failed to analyze bill" }, { status: 500 });
+    console.error("analyze-bill error:", e?.status || "", e?.error?.type || "");
+    const status = e?.status === 401 ? 401 : 500;
+    const msg = e?.status === 401 ? "Invalid API key" : "Failed to analyze bill";
+    return Response.json({ error: msg }, { status });
   }
 }
