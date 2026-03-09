@@ -564,28 +564,41 @@ const LEAN_THRESHOLD_LEFT = 0.4;
 const BILL_NAME_MAX_WORDS = 6;
 
 // Detect absurd, violent, or unconstitutional bill proposals
-const ABSURD_VIOLENT_WORDS = /\b(kill|murder|execute|exterminate|genocide|slaughter|massacre|assassinate|behead|hang|shoot|stab|rape|molest|torture|kidnap|enslave|trafficking|blow up|bomb|nuke|detonate|explode|burn down|set fire|arson|poison|gas|weaponize|terrorize|ethnic cleansing)\b/;
 const ABSURD_PATTERNS = [
-  // Any violent verb (catches "kill X", "blow up Y", "bomb Z", etc.)
-  ABSURD_VIOLENT_WORDS,
-  // Targeting people or places with destructive intent
-  /\b(destroy|annihilate|wipe out|level|flatten|raze|obliterate|eradicate|purge|eliminate|remove|get rid of|abolish)\b.*\b(state|city|country|nation|town|county|district|territory|people|population|race|ethnic|religion|church|mosque|synagogue|temple)\b/,
-  // Targeting specific people or political figures
-  /\b(destroy|annihilate|eliminate|remove|get rid of|purge)\b.*\b(trump|biden|harris|pence|obama|clinton|bush|pelosi|mcconnell|schumer|president|speaker|senator|justice|judge|governor|congressman|mayor)\b/,
-  // Banning fundamental rights or existence
-  /\b(ban|outlaw|prohibit|criminalize)\b.*\b(all|every|citizen|people|living|breathing|existing|life|freedom|rights|voting|speech|religion|press|assembly|protest)\b/,
-  // WMDs and mass destruction
+  // ── Violence & destruction ──
+  /\b(kill|murder|execute|exterminate|genocide|slaughter|massacre|assassinate|behead|hang|shoot|stab|rape|molest|torture|kidnap|enslave|trafficking|blow up|bomb|nuke|detonate|explode|burn down|set fire|arson|poison|gas|weaponize|terrorize|ethnic cleansing)\b/,
+  // Destructive intent toward places, groups, or institutions
+  /\b(destroy|annihilate|wipe out|level|flatten|raze|obliterate|eradicate|purge|eliminate|get rid of|remove)\b.*\b(state|city|country|nation|people|population|race|church|mosque|synagogue|temple|school|hospital|congress|capitol|white house|pentagon|supreme court|alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)\b/,
+  // WMDs
   /\b(nuke|nuclear bomb|nuclear strike|nuclear attack|chemical weapon|biological weapon|bioweapon|dirty bomb|anthrax|sarin|mustard gas)\b/,
   // War and military aggression
   /\bdeclare war\b/, /\binvade \w+/, /\bwar (on|with) \w+/,
-  // State-level destruction (catches "blow up virginia", "destroy california", etc.)
-  /\b(destroy|blow up|bomb|nuke|burn|attack|invade|annihilate|wipe out|level|flatten|obliterate)\b.*\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|dc|congress|capitol|white house|pentagon|supreme court)\b/,
-  // Slurs and hate speech patterns
-  /\b(white power|white supremac\w*|heil hitler|nazi|racial holy war|race war|day of the rope|great replacement|final solution)\b/,
-  // Legalize clearly illegal acts
-  /\b(legalize|legalise|allow|permit|authorize)\b.*\b(murder|rape|pedophil|child abuse|human trafficking|slavery|torture|terrorism|genocide|theft|robbery|arson|kidnap)\b/,
-  // Profanity-only or troll inputs (just swear words, no policy content)
-  /^[^a-z]*\b(fuck|shit|ass|bitch|damn|hell|crap|dick|cock|pussy|cunt|bastard|whore|slut)\b[^a-z]*$/,
+
+  // ── Targeting identity groups ──
+  // Ban/deport/criminalize + any identity group
+  /\b(ban|outlaw|prohibit|deport|criminalize|arrest|jail|imprison|intern|detain|round up|register all|exterminate|purge|remove|eliminate|eradicate|get rid of)\b.*\b(gays?|lesbians?|lgbt\w*|queers?|trans\w*|homosexuals?|bisexuals?|nonbinary|jews?|jewish|muslims?|islam\w*|christians?|catholics?|hindus?|sikhs?|buddhists?|atheists?|blacks?|africans?|asians?|hispanics?|latinos?|latinas?|latinx|mexicans?|chinese|arabs?|natives?|indigenous|immigrants?|refugees?|women|woman|men|disabled|autistic)\b/,
+  // Reverse order: identity group + should be banned/killed/etc
+  /\b(gay|gays|lesbian|lesbians|lgbt\w*|queer|trans\w*|homosexual|bisexual|jew|jews|jewish|muslim|muslims|islam\w*|black|blacks|african|asian|hispanic|latino|latina|mexican|chinese|arab|native|indigenous|immigrant|immigrants|refugee|women|disabled)\b.*\b(should die|should be killed|should be banned|should be deported|don'?t deserve|are subhuman|are animals|are vermin|are parasites|are inferior)\b/,
+
+  // ── Hate speech & extremism ──
+  /\b(white power|white supremac\w*|heil hitler|nazi|racial holy war|race war|day of the rope|great replacement|final solution|jewish question|zog|fourteen words|1488|blood and soil)\b/,
+  // Impose theocracy
+  /\b(institute|impose|establish|enforce|implement|mandate)\b.*\b(sharia|caliphate|theocracy|religious law|biblical law|christian nation|hindu rashtra|jewish state)\b/,
+
+  // ── Arms dealing & sanctions violations ──
+  /\b(sell|supply|give|send|export|ship|transfer|provide)\b.*\b(arms|weapons|missiles|bombs|guns|ammunition|nukes|nuclear)\b.*\b(to|for)\b.*\b(north korea|iran|russia|china|taliban|al.?qaeda|isis|hamas|hezbollah|cartel|terrorist)\b/,
+  /\b(fund|finance|support|arm|equip)\b.*\b(terroris\w*|al.?qaeda|isis|isil|taliban|hamas|hezbollah|cartel|militia|insurgent)\b/,
+
+  // ── Legalize clearly illegal acts ──
+  /\b(legalize|legalise|allow|permit|authorize|decriminalize)\b.*\b(murder|rape|pedophil\w*|child abuse|child marriage|human trafficking|slavery|torture|terrorism|genocide|theft|robbery|arson|kidnap|incest|bestiality|cannibalism)\b/,
+
+  // ── Banning fundamental rights ──
+  /\b(ban|outlaw|prohibit|criminalize|abolish|end|eliminate|remove)\b.*\b(all voting|all elections|free speech|freedom of speech|freedom of religion|freedom of press|right to vote|democracy|constitution|bill of rights|due process|habeas corpus|trial by jury)\b/,
+  // Suspend/overthrow government
+  /\b(suspend|overthrow|dissolve|abolish|end|coup|disband)\b.*\b(constitution|congress|senate|house|government|democracy|elections|supreme court|judiciary)\b/,
+
+  // ── Profanity-only (no policy content) ──
+  /^[^a-z]*\b(fuck|shit|ass|bitch|damn|hell|crap|dick|cock|pussy|cunt|bastard|whore|slut|retard)\b[^a-z]*$/,
 ];
 
 function analyzeBillText(text) {
