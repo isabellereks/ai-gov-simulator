@@ -1,3 +1,6 @@
+import "./globals.css";
+import Script from "next/script";
+
 export const metadata = {
   title: "PolicySim",
   icons: { icon: "/favicon.jpeg" },
@@ -6,7 +9,16 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body style={{ margin: 0 }}>{children}</body>
+      <body>
+        {children}
+        {process.env.NODE_ENV === "development" && (
+          <Script
+            src="//unpkg.com/react-grab/dist/index.global.js"
+            crossOrigin="anonymous"
+            strategy="beforeInteractive"
+          />
+        )}
+      </body>
     </html>
   );
 }
