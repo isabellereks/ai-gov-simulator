@@ -27,7 +27,9 @@ the frontend imports a compact version from `src/govData.js` (auto-generated, st
 
 ## custom bills
 
-you can write your own bill in plain English. the app analyzes your text client-side using keyword matching to figure out which policy dimensions it touches, then runs it through the full simulation pipeline.
+you can write your own bill in plain English. the app analyzes your text client-side using keyword matching to figure out which policy dimensions it touches, then runs it through the full simulation pipeline. 
+
+you can also bring your own API key! in testing, i used haiku 4.5 to make it a bit more accurate.
 
 ## project structure
 
