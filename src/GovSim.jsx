@@ -402,36 +402,91 @@ function buildTimeline(policy) {
   return { events: ev, duration: t + 2000 };
 }
 
-// ─── CUSTOM BILL SYSTEM PROMPT ───
-const BILL_SYSTEM_PROMPT = `You are a congressional policy analyst. Given a bill description, return ONLY a JSON object (no markdown, no backticks) with this exact schema:
-{
-  "name": "Short official-sounding bill title",
-  "summary": "One sentence description",
-  "issueWeights": { ... },
-  "issuePositions": { ... },
-  "partySupport": "R" or "D" or "bipartisan",
-  "affectedIndustries": ["industry1", "industry2"],
-  "constitutionalIssues": { ... },
-  "constitutionalPosition": { ... },
-  "committees": ["Committee1", "Committee2"],
-  "controversy_level": 0.0-1.0,
-  "factions": {
-    "supporters": "Who supports this and why (one sentence)",
-    "opponents": "Who opposes this and why (one sentence)"
+// ─── KEYWORD BILL ANALYZER ───
+const BILL_KEYWORDS = {
+  immigration: { keys: ["immigra","border","migrant","deport","asylum","visa","refugee","illegal alien","citizenship","daca","dreamer","ice ","customs"], con: ["secure border","deport","illegal","enforce","wall","ice ","ban entry"], lib: ["pathway","amnesty","dreamer","daca","refugee","asylum","protect immigrant"] },
+  taxes_spending: { keys: ["tax","taxes","taxation","irs","revenue","fiscal","tariff","duty","income tax"], con: ["cut tax","lower tax","flat tax","repeal tax","reduce tax","tax relief"], lib: ["raise tax","wealth tax","tax the rich","progressive tax","corporate tax"] },
+  healthcare: { keys: ["health","medicare","medicaid","hospital","drug price","pharma","insurance","medical","obamacare","aca","prescription","mental health"], con: ["repeal aca","repeal obamacare","privatize","health savings","market-based"], lib: ["medicare for all","universal health","single payer","expand medicaid","public option","lower drug"] },
+  gun_rights: { keys: ["gun","firearm","2nd amendment","second amendment","weapon","ar-15","rifle","ammunition","concealed carry","background check","nra"], con: ["protect gun","expand gun","concealed carry","2nd amendment","arm teacher","repeal gun"], lib: ["ban gun","gun control","assault weapon","background check","red flag","gun violence","gun safety"] },
+  climate_energy: { keys: ["climate","carbon","emission","renewable","solar","wind","fossil","oil","gas","coal","energy","environment","pollution","epa","green","paris accord","drill"], con: ["drill","fossil","repeal epa","coal","deregulat","energy independence","pipeline"], lib: ["renewable","solar","wind","carbon tax","green new","paris","clean energy","climate action","ban fossil","net zero"] },
+  defense_military: { keys: ["military","defense","pentagon","army","navy","troops","veteran","nato","missile","nuclear","weapon","warfare","soldier"], con: ["increase defense","military spending","strong military","rebuild military"], lib: ["cut defense","reduce military","withdraw","end war","peace"] },
+  education: { keys: ["education","school","student","college","university","teacher","tuition","loan","curriculum","charter"], con: ["school choice","charter","voucher","homeschool","parental rights in ed"], lib: ["free college","student debt","public school","teacher pay","fund education","cancel student"] },
+  tech_regulation: { keys: ["tech","silicon valley","algorithm","ai ","artificial intelligence","data privacy","social media","big tech","tiktok","facebook","google","apple","amazon","antitrust","monopoly","crypto","bitcoin","blockchain"], con: ["deregulat","free market","crypto freedom","protect section 230"], lib: ["regulate tech","break up","antitrust","data privacy","ban tiktok","algorithm","ai safety","ai regulation"] },
+  criminal_justice: { keys: ["crime","criminal","prison","police","sentencing","incarcerat","bail","parole","felony","law enforcement","drug offense","marijuana","cannabis","death penalty","fentanyl"], con: ["tough on crime","mandatory minimum","death penalty","back the blue","increase sentencing","law and order","fund police"], lib: ["reform","decriminaliz","legaliz","abolish","defund police","end mandatory","reduce sentencing","ban death penalty","expunge"] },
+  trade_tariffs: { keys: ["trade","tariff","import","export","china trade","nafta","usmca","wto","sanction","embargo","outsourc","supply chain","manufactur"], con: ["tariff","protect american","buy american","sanction","reshoring"], lib: ["free trade","lower tariff","global trade","trade agreement"] },
+  abortion_social: { keys: ["abort","reproductive","roe","pro-life","pro-choice","planned parenthood","contracepti","fetal","trimester","lgbtq","transgender","marriage equality","gender","dei","woke","crt","critical race"], con: ["ban abort","pro-life","protect unborn","heartbeat","restrict abort","ban gender","anti-dei","ban crt","religious freedom","traditional marriage"], lib: ["pro-choice","reproductive right","codify roe","protect abort","lgbtq","transgender right","marriage equality","dei","equality act"] },
+  government_spending: { keys: ["spend","budget","deficit","debt","fiscal","appropriat","entitlement","welfare","social security","stimulus","bailout","austerity"], con: ["cut spending","reduce deficit","balanced budget","austerity","slash budget","reduce debt"], lib: ["invest","fund","increase spending","stimulus","expand program","social safety"] },
+  foreign_policy_hawks: { keys: ["foreign","diplomacy","sanction","nato","china","russia","iran","israel","ukraine","taiwan","ally","alliance","intelligence","cia","intervention","withdraw"], con: ["sanction","strong against","support israel","defend taiwan","increase aid to israel","confront china","confront russia"], lib: ["diplomacy","negotiate","withdraw","end aid","reduce intervention","peace","ceasefire"] },
+  civil_liberties: { keys: ["privacy","surveillance","freedom","liberty","rights","constitution","first amendment","free speech","censor","warrant","patriot act","fisa","nsa"], con: ["protect speech","anti-censor","religious liberty","parental right"], lib: ["privacy","end surveillance","protect rights","voting rights","civil rights","anti-discriminat"] },
+  labor_unions: { keys: ["labor","union","worker","wage","minimum wage","overtime","strike","collective bargain","gig economy","right to work","osha","workplace"], con: ["right to work","deregulat","reduce union","lower minimum"], lib: ["raise wage","minimum wage","pro-union","protect worker","collective bargain","paid leave","gig worker protect"] },
+};
+
+const CONST_KEYWORDS = {
+  executive_power: { keys: ["executive order","presidential power","executive action","veto","pardon","emergency power"], con: ["expand executive","presidential authority"], lib: ["limit executive","check presidential","restrict executive"] },
+  individual_rights_vs_government: { keys: ["individual right","personal freedom","government overreach","mandate","liberty","nanny state"], con: ["protect individual","limit government","personal freedom"], lib: ["public interest","collective","regulate for safety"] },
+  federal_vs_state_power: { keys: ["state right","federal","preempt","10th amendment","local control","nationwide","uniform standard"], con: ["state right","local control","10th amendment"], lib: ["federal standard","nationwide","preempt state"] },
+  regulatory_authority_admin_state: { keys: ["regulat","agency","epa","fda","sec","ftc","bureaucra","red tape","deregulat","admin"], con: ["deregulat","cut red tape","reduce regulation","limit agency"], lib: ["regulate","strengthen regulation","empower agency","new regulation"] },
+  criminal_defendant_rights: { keys: ["defendant","due process","trial","bail","habeas","miranda","public defender"], con: ["victim right","tough on crime"], lib: ["defendant right","due process","reform bail","public defender"] },
+  free_speech_1A: { keys: ["free speech","first amendment","censor","expression","press","protest","social media speech"], con: ["protect speech","anti-censor","free expression"], lib: ["hate speech","misinformation","content moderat","limit speech"] },
+  gun_rights_2A: { keys: ["2nd amendment","second amendment","bear arms","gun right","firearm right"], con: ["protect 2nd","expand gun right","bear arms"], lib: ["limit 2nd","restrict firearm","gun control"] },
+  religious_liberty: { keys: ["religious","faith","church","prayer","god","worship","conscience"], con: ["religious freedom","protect faith","conscience"], lib: ["separation of church","secular","limit religious exempt"] },
+  commerce_clause_scope: { keys: ["interstate commerce","commerce clause","federal commerce","regulate commerce","economic activity"], con: ["limit commerce clause","narrow commerce"], lib: ["expand commerce","broad commerce","interstate regulat"] },
+  equal_protection_discrimination: { keys: ["equal protection","discriminat","14th amendment","civil right","affirm action","disparate"], con: ["merit-based","end affirm action","equal treatment"], lib: ["anti-discriminat","affirm action","equity","protect minority"] },
+};
+
+function analyzeBillText(text) {
+  const t = text.toLowerCase();
+  const issueWeights = {}, issuePositions = {};
+  let totalWeight = 0, weightedLean = 0;
+
+  for (const [issue, { keys, con, lib }] of Object.entries(BILL_KEYWORDS)) {
+    let weight = 0;
+    for (const k of keys) { if (t.includes(k)) weight += 0.3; }
+    weight = Math.min(weight, 0.95);
+    if (weight < 0.1) continue;
+    issueWeights[issue] = +weight.toFixed(2);
+    let conScore = 0, libScore = 0;
+    for (const k of con) { if (t.includes(k)) conScore++; }
+    for (const k of lib) { if (t.includes(k)) libScore++; }
+    const total = conScore + libScore;
+    const pos = total === 0 ? 0.5 : 0.15 + (conScore / total) * 0.7;
+    issuePositions[issue] = +pos.toFixed(2);
+    totalWeight += weight;
+    weightedLean += weight * pos;
   }
+
+  const constitutionalIssues = {}, constitutionalPosition = {};
+  for (const [issue, { keys, con, lib }] of Object.entries(CONST_KEYWORDS)) {
+    let weight = 0;
+    for (const k of keys) { if (t.includes(k)) weight += 0.35; }
+    weight = Math.min(weight, 0.9);
+    if (weight < 0.1) continue;
+    constitutionalIssues[issue] = +weight.toFixed(2);
+    let conScore = 0, libScore = 0;
+    for (const k of con) { if (t.includes(k)) conScore++; }
+    for (const k of lib) { if (t.includes(k)) libScore++; }
+    const total = conScore + libScore;
+    constitutionalPosition[issue] = +(total === 0 ? 0.5 : 0.15 + (conScore / total) * 0.7).toFixed(2);
+  }
+
+  // If nothing matched, give a generic center bill
+  if (Object.keys(issueWeights).length === 0) {
+    issueWeights.government_spending = 0.5;
+    issuePositions.government_spending = 0.5;
+    issueWeights.civil_liberties = 0.3;
+    issuePositions.civil_liberties = 0.5;
+  }
+
+  const avgLean = totalWeight > 0 ? weightedLean / totalWeight : 0.5;
+  const partySupport = avgLean > 0.6 ? "R" : avgLean < 0.4 ? "D" : "bipartisan";
+  const lean = partySupport === "R" ? "right" : partySupport === "D" ? "left" : "center";
+
+  // Generate a name from the text
+  const words = text.trim().split(/\s+/).slice(0, 6).map((w, i) => i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w);
+  const name = words.join(" ") + (words.length < text.trim().split(/\s+/).length ? " Act" : " Act");
+
+  return { name, lean, partySupport, issueWeights, issuePositions, constitutionalIssues, constitutionalPosition };
 }
-
-issueWeights: how much each of these 15 issues matters to this bill (0.0 = irrelevant, 1.0 = core issue):
-immigration, taxes_spending, healthcare, gun_rights, climate_energy, defense_military, education, tech_regulation, criminal_justice, trade_tariffs, abortion_social, government_spending, foreign_policy_hawks, civil_liberties, labor_unions
-
-issuePositions: what POSITION this bill takes on each relevant issue (0.0 = most liberal, 1.0 = most conservative). Only include issues where weight > 0.
-
-constitutionalIssues: how much each constitutional dimension matters (0.0 = not relevant, 1.0 = core question):
-executive_power, individual_rights_vs_government, federal_vs_state_power, regulatory_authority_admin_state, criminal_defendant_rights, free_speech_1A, gun_rights_2A, religious_liberty, commerce_clause_scope, equal_protection_discrimination
-
-constitutionalPosition: what position the bill takes (0.0 = expansive/liberal interpretation, 1.0 = restrictive/conservative interpretation). Only include issues where weight > 0.
-
-Be precise about which issues a bill actually touches.`;
 
 // ─── RESPONSIVE HOOKS ───
 function useWindowSize() {
@@ -592,25 +647,10 @@ export default function GovSim() {
   const replay = () => { setPlayhead(0); setPlaying(true); cur.current = VIEWS.idle; };
 
   // Custom bill analyzer
-  const analyzeBill = useCallback(async (text) => {
+  const analyzeBill = useCallback((text) => {
     if (!text.trim()) return;
-    setAnalyzing(true); setApiError(null);
-    try {
-      const response = await fetch("/api/analyze-bill", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (!response.ok) throw new Error("API error");
-      const bill = await response.json();
-      // Derive lean from partySupport
-      bill.lean = bill.partySupport === "R" ? "right" : bill.partySupport === "D" ? "left" : "center";
-      setAnalyzing(false);
-      go(bill);
-    } catch (e) {
-      setAnalyzing(false);
-      setApiError("Couldn't analyze that bill \u2014 try rephrasing");
-    }
+    const bill = analyzeBillText(text);
+    go(bill);
   }, [go]);
 
   const partyColor = p => p === "R" ? C.rep : p === "D" ? C.dem : C.ind;
@@ -770,20 +810,18 @@ export default function GovSim() {
             <div style={{ fontSize: mob ? 10 : 11, color: C.textMute, fontFamily: SANS, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>Describe your own bill</div>
             <div style={{ display: "flex", gap: 8 }}>
               <input
-                type="text" value={customBill} onChange={e => { setCustomBill(e.target.value); setApiError(null); }}
-                onKeyDown={e => { if (e.key === "Enter" && !analyzing) analyzeBill(customBill); }}
+                type="text" value={customBill} onChange={e => setCustomBill(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") analyzeBill(customBill); }}
                 placeholder={mob ? "e.g. Ban TikTok..." : "e.g. Ban TikTok nationwide, legalize marijuana..."}
-                disabled={analyzing}
                 style={{ flex: 1, padding: mob ? "8px 10px" : "9px 14px", borderRadius: R.md, border: `1px solid ${C.border}`, background: C.cardAlt, fontFamily: SERIF, fontSize: mob ? 14 : 15, color: C.text, outline: "none", minWidth: 0 }}
               />
               <button
-                onClick={() => analyzeBill(customBill)} disabled={analyzing || !customBill.trim()}
-                style={{ padding: mob ? "8px 14px" : "9px 20px", borderRadius: R.md, border: "none", background: analyzing ? C.textMute : C.bar, color: C.bg, fontFamily: SANS, fontWeight: 600, fontSize: mob ? 12 : 13, cursor: analyzing ? "wait" : "pointer", whiteSpace: "nowrap", opacity: (!customBill.trim() && !analyzing) ? 0.5 : 1 }}
+                onClick={() => analyzeBill(customBill)} disabled={!customBill.trim()}
+                style={{ padding: mob ? "8px 14px" : "9px 20px", borderRadius: R.md, border: "none", background: C.bar, color: C.bg, fontFamily: SANS, fontWeight: 600, fontSize: mob ? 12 : 13, cursor: "pointer", whiteSpace: "nowrap", opacity: !customBill.trim() ? 0.5 : 1 }}
               >
-                {analyzing ? "Analyzing..." : "Simulate"}
+                Simulate
               </button>
             </div>
-            {apiError && <div style={{ marginTop: 8, fontSize: 12, color: C.nay, fontFamily: SANS }}>{apiError}</div>}
           </div>
 
           {/* Divider */}
