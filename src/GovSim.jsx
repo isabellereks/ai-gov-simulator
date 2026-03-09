@@ -846,8 +846,10 @@ export default function GovSim() {
   const analyzeStartTime = useRef(0);
   const analyzeBill = useCallback(async (text) => {
     if (!text.trim()) return;
-    if (!apiKey) {
-      go(analyzeBillText(text));
+    // Always run absurd check client-side first — never send violent/hateful input to the API
+    const clientBill = analyzeBillText(text);
+    if (clientBill.isAbsurd || !apiKey) {
+      go(clientBill);
       return;
     }
     // Optimistic: immediately show the visualization with dots popping in
@@ -864,11 +866,10 @@ export default function GovSim() {
       if (elapsed < minWait) await new Promise(r => setTimeout(r, minWait - elapsed));
       go(bill);
     } catch {
-      const bill = analyzeBillText(text);
       const minWait = 2500;
       const elapsed = Date.now() - analyzeStartTime.current;
       if (elapsed < minWait) await new Promise(r => setTimeout(r, minWait - elapsed));
-      go(bill);
+      go(clientBill);
     }
   }, [go, apiKey]);
 
