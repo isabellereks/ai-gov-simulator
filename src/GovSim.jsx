@@ -386,7 +386,10 @@ function buildTimeline(policy) {
   const totalConst = Object.values(policy.constitutionalIssues || {}).reduce((a, b) => a + b, 0);
   const challenged = totalConst > 1.5 || (totalConst > 0.5 && Math.random() < 0.45);
   if (!challenged) {
-    t += 1200; ev.push({ t, type: "scotusResult", ch: false }); t += 500;
+    SCT.forEach((m, i) => { ev.push({ t: t + i * 80, type: "skip", id: m.id }); });
+    t += SCT.length * 80 + 600;
+    ev.push({ t, type: "scotusResult", ch: false });
+    t += 400;
     ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Enacted" });
     return { events: ev, duration: t + 2000 };
   }
@@ -471,6 +474,7 @@ export default function GovSim() {
       if (e.t > playhead) break;
       if (e.type === "stage") st.stage = e.val;
       if (e.type === "vote") st.rv[e.id] = e.v;
+      if (e.type === "skip") st.rv[e.id] = "skip";
       if (e.type === "counter") { st.cy = e.y; st.cn = e.n; }
       if (e.type === "houseResult") st.hR = e;
       if (e.type === "senateResult") st.sR = e;
@@ -616,7 +620,7 @@ export default function GovSim() {
   }, [go]);
 
   const partyColor = p => p === "R" ? C.rep : p === "D" ? C.dem : C.ind;
-  const nc = m => { const v = snap.rv[m.id]; if (v === true) return C.yea; if (v === false) return C.nay; return partyColor(m.p); };
+  const nc = m => { const v = snap.rv[m.id]; if (v === "skip") return C.borderLight; if (v === true) return C.yea; if (v === false) return C.nay; return partyColor(m.p); };
   const nr = m => {
     if (m.r === "President") return 12;
     if (m.r === "Chief Justice") return 10;
@@ -747,6 +751,10 @@ export default function GovSim() {
           <div style={{ background: C.card, borderRadius: R.lg, padding: mob ? "16px 28px" : "22px 52px", boxShadow: S.lg, border: `1px solid ${C.border}` }}>
             <div style={{ fontSize: mob ? 10 : 11, fontFamily: SANS, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: C.textMute, marginBottom: 6 }}>Final Result</div>
             <div style={{ fontSize: mob ? 22 : 34, fontWeight: 600, fontFamily: SANS, color: accent, lineHeight: 1.1 }}>{label}</div>
+            <div style={{ marginTop: mob ? 8 : 10, display: "flex", gap: 8, justifyContent: "center" }}>
+              <button onClick={() => { reset(); }} onMouseEnter={e => { e.target.style.color = C.bg; e.target.style.background = C.bar; e.target.style.borderColor = C.bar; }} onMouseLeave={e => { e.target.style.color = C.textMid; e.target.style.background = "transparent"; e.target.style.borderColor = C.border; }} style={{ padding: mob ? "7px 16px" : "8px 20px", borderRadius: R.md, border: `1px solid ${C.border}`, background: "transparent", color: C.textMid, fontFamily: SANS, fontWeight: 500, fontSize: mob ? 11 : 12, cursor: "pointer", letterSpacing: 0, transition: "all .2s" }}>Try a new bill</button>
+              <button onClick={() => { setPlayhead(0); setPlaying(true); }} onMouseEnter={e => { e.target.style.color = C.bg; e.target.style.background = C.bar; e.target.style.borderColor = C.bar; }} onMouseLeave={e => { e.target.style.color = C.textMid; e.target.style.background = "transparent"; e.target.style.borderColor = C.border; }} style={{ padding: mob ? "7px 16px" : "8px 20px", borderRadius: R.md, border: `1px solid ${C.border}`, background: "transparent", color: C.textMid, fontFamily: SANS, fontWeight: 500, fontSize: mob ? 11 : 12, cursor: "pointer", letterSpacing: 0, transition: "all .2s" }}>Replay</button>
+            </div>
           </div>
         </div>;
       })()}
