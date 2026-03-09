@@ -564,46 +564,66 @@ const LEAN_THRESHOLD_LEFT = 0.4;
 const BILL_NAME_MAX_WORDS = 6;
 
 // Detect absurd, violent, or unconstitutional bill proposals
+const ABSURD_VIOLENT_WORDS = /\b(kill|murder|execute|exterminate|genocide|slaughter|massacre|assassinate|behead|hang|shoot|stab|rape|molest|torture|kidnap|enslave|trafficking|blow up|bomb|nuke|detonate|explode|burn down|set fire|arson|poison|gas|weaponize|terrorize|ethnic cleansing)\b/;
 const ABSURD_PATTERNS = [
-  /\b(kill|murder|execute|exterminate|genocide|slaughter|massacre|eliminate|eradicate|purge|destroy|assassinate|behead|hang|shoot)\b.*\b(all|every|citizen|people|american|population|human|person|baby|babies|infant|child|children|everyone|men|women|president|vice president|senator|representative|judge|justice|official|politician|leader|speaker|governor|trump|biden|harris|pence|obama|clinton|bush|pelosi|mcconnell|schumer)\b/,
-  // Short violent phrases (e.g. "kill X", "murder X") — catches name-based targeting
-  /\b(kill|murder|execute|assassinate|shoot|behead|hang|bomb|nuke|destroy|eliminate)\s+\w+/,
-  /\b(ban|outlaw|prohibit|criminalize)\b.*\b(all|every|citizen|people|living|breathing|existing|life|freedom|rights)\b/,
-  /\b(nuke|nuclear bomb|nuclear strike|nuke the)\b/,
-  /\bdeclare war\b/,
-  /\binvade \w+/,
-  /\bwar (on|with) \w+/,
+  // Any violent verb (catches "kill X", "blow up Y", "bomb Z", etc.)
+  ABSURD_VIOLENT_WORDS,
+  // Targeting people or places with destructive intent
+  /\b(destroy|annihilate|wipe out|level|flatten|raze|obliterate|eradicate|purge|eliminate|remove|get rid of|abolish)\b.*\b(state|city|country|nation|town|county|district|territory|people|population|race|ethnic|religion|church|mosque|synagogue|temple)\b/,
+  // Targeting specific people or political figures
+  /\b(destroy|annihilate|eliminate|remove|get rid of|purge)\b.*\b(trump|biden|harris|pence|obama|clinton|bush|pelosi|mcconnell|schumer|president|speaker|senator|justice|judge|governor|congressman|mayor)\b/,
+  // Banning fundamental rights or existence
+  /\b(ban|outlaw|prohibit|criminalize)\b.*\b(all|every|citizen|people|living|breathing|existing|life|freedom|rights|voting|speech|religion|press|assembly|protest)\b/,
+  // WMDs and mass destruction
+  /\b(nuke|nuclear bomb|nuclear strike|nuclear attack|chemical weapon|biological weapon|bioweapon|dirty bomb|anthrax|sarin|mustard gas)\b/,
+  // War and military aggression
+  /\bdeclare war\b/, /\binvade \w+/, /\bwar (on|with) \w+/,
+  // State-level destruction (catches "blow up virginia", "destroy california", etc.)
+  /\b(destroy|blow up|bomb|nuke|burn|attack|invade|annihilate|wipe out|level|flatten|obliterate)\b.*\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|dc|congress|capitol|white house|pentagon|supreme court)\b/,
+  // Slurs and hate speech patterns
+  /\b(white power|white supremac\w*|heil hitler|nazi|racial holy war|race war|day of the rope|great replacement|final solution)\b/,
+  // Legalize clearly illegal acts
+  /\b(legalize|legalise|allow|permit|authorize)\b.*\b(murder|rape|pedophil|child abuse|human trafficking|slavery|torture|terrorism|genocide|theft|robbery|arson|kidnap)\b/,
+  // Profanity-only or troll inputs (just swear words, no policy content)
+  /^[^a-z]*\b(fuck|shit|ass|bitch|damn|hell|crap|dick|cock|pussy|cunt|bastard|whore|slut)\b[^a-z]*$/,
 ];
 
 function analyzeBillText(text) {
-  const normalized = text.toLowerCase();
+  const normalized = text.toLowerCase().trim();
 
   // Check for absurd/violent/extreme proposals
   const isAbsurd = ABSURD_PATTERNS.some(pat => pat.test(normalized));
+
+  // Check for gibberish/too-short inputs (under 3 real words after stripping noise)
+  const realWords = normalized.replace(/[^a-z\s]/g, "").split(/\s+/).filter(w => w.length > 1);
+  const isGibberish = realWords.length < 2;
 
   const issues = scoreKeywords(normalized, BILL_KEYWORDS, 0.3, 0.95);
   const constitutional = scoreKeywords(normalized, CONST_KEYWORDS, 0.35, 0.9);
 
   if (isAbsurd) {
-    // Force high controversy + constitutional crisis — almost no one votes yes
-    issues.weights.civil_liberties = 0.95;
-    issues.positions.civil_liberties = 0.95;
-    issues.weights.criminal_justice = 0.9;
-    issues.positions.criminal_justice = 0.95;
-    if (normalized.includes("iran") || normalized.includes("war") || normalized.includes("invade") || normalized.includes("bomb")) {
-      issues.weights.foreign_policy_hawks = 0.95;
-      issues.positions.foreign_policy_hawks = 0.95;
-      issues.weights.defense_military = 0.9;
-      issues.positions.defense_military = 0.85;
-    }
-    constitutional.weights.individual_rights_vs_government = 0.95;
-    constitutional.positions.individual_rights_vs_government = 0.95;
-    constitutional.weights.executive_power = 0.8;
-    constitutional.positions.executive_power = 0.9;
+    // Force extreme opposition across all dimensions — nearly no one votes yes
+    // Override any keyword matches that might have been picked up
+    issues.weights = {
+      civil_liberties: 0.95, criminal_justice: 0.95, government_spending: 0.9,
+      defense_military: 0.85, immigration: 0.7, healthcare: 0.6,
+    };
+    issues.positions = {
+      civil_liberties: 0.99, criminal_justice: 0.99, government_spending: 0.95,
+      defense_military: 0.95, immigration: 0.90, healthcare: 0.90,
+    };
+    constitutional.weights = {
+      individual_rights_vs_government: 0.95, executive_power: 0.9,
+      equal_protection_discrimination: 0.85, criminal_defendant_rights: 0.8,
+    };
+    constitutional.positions = {
+      individual_rights_vs_government: 0.99, executive_power: 0.95,
+      equal_protection_discrimination: 0.95, criminal_defendant_rights: 0.95,
+    };
   }
 
-  if (Object.keys(issues.weights).length === 0) {
-    // Unrecognized bill — make it controversial so it doesn't get unanimous votes
+  if (!isAbsurd && (isGibberish || Object.keys(issues.weights).length === 0)) {
+    // Unrecognized or gibberish bill — make it divisive so it doesn't get unanimous votes
     issues.weights.government_spending = 0.7;
     issues.positions.government_spending = 0.25;
     issues.weights.civil_liberties = 0.6;
@@ -635,7 +655,7 @@ function analyzeBillText(text) {
   const isRevenue = revenueKeywords.some(k => normalized.includes(k));
   const startChamber = isRevenue ? "hou" : (Math.random() < 0.5 ? "hou" : "sen");
 
-  const controversy_level = isAbsurd ? 0.98 : (Math.abs(averageLean - 0.5) > 0.25 ? 0.7 : 0.4);
+  const controversy_level = isAbsurd ? 1.0 : isGibberish ? 0.75 : (Math.abs(averageLean - 0.5) > 0.25 ? 0.7 : 0.4);
 
   return { name, lean, partySupport, startChamber, controversy_level, issueWeights: issues.weights, issuePositions: issues.positions, constitutionalIssues: constitutional.weights, constitutionalPosition: constitutional.positions };
 }
