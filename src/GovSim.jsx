@@ -565,14 +565,15 @@ const BILL_NAME_MAX_WORDS = 6;
 
 // Detect absurd, violent, or unconstitutional bill proposals
 const ABSURD_PATTERNS = [
-  /\b(kill|murder|execute|exterminate|genocide|slaughter|massacre|eliminate|eradicate|purge|destroy)\b.*\b(all|every|citizen|people|american|population|human|person|baby|babies|infant|child|children|everyone|men|women)\b/,
+  /\b(kill|murder|execute|exterminate|genocide|slaughter|massacre|eliminate|eradicate|purge|destroy|assassinate|behead|hang|shoot)\b.*\b(all|every|citizen|people|american|population|human|person|baby|babies|infant|child|children|everyone|men|women|president|vice president|senator|representative|judge|justice|official|politician|leader|speaker|governor)\b/,
   /\b(ban|outlaw|prohibit|criminalize)\b.*\b(all|every|citizen|people|living|breathing|existing|life|freedom|rights)\b/,
   /\b(nuke|nuclear bomb|nuclear strike|nuke the)\b/,
-  /\bdeclare war on\b/,
-  /\binvade iran\b/,
-  /\bwar (on|with) iran\b/,
-  /\bbomb iran\b/,
-  /\battack iran\b/,
+  /\bdeclare war\b/,
+  /\binvade \w+/,
+  /\bwar (on|with) \w+/,
+  /\bbomb \w+/,
+  /\battack \w+/,
+  /\b(execute|assassinate|behead|hang|shoot|kill|murder)\b.{0,20}\b(the |our )?(president|vice president|speaker|chief justice|senator|congressman|mayor|governor)\b/,
 ];
 
 function analyzeBillText(text) {

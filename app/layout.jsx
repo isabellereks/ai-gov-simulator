@@ -1,5 +1,6 @@
 import "./globals.css";
 import Script from "next/script";
+import { Analytics } from "@vercel/analytics/react";
 
 export const metadata = {
   title: "PolicySim",
@@ -11,6 +12,7 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body>
         {children}
+        <Analytics />
         {process.env.NODE_ENV === "development" && (
           <Script
             src="//unpkg.com/react-grab/dist/index.global.js"
