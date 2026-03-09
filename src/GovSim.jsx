@@ -596,19 +596,13 @@ export default function GovSim() {
     if (!text.trim()) return;
     setAnalyzing(true); setApiError(null);
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/analyze-bill", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1500,
-          system: BILL_SYSTEM_PROMPT,
-          messages: [{ role: "user", content: text }],
-        }),
+        body: JSON.stringify({ text }),
       });
-      const data = await response.json();
-      const billText = data.content[0].text;
-      const bill = JSON.parse(billText);
+      if (!response.ok) throw new Error("API error");
+      const bill = await response.json();
       // Derive lean from partySupport
       bill.lean = bill.partySupport === "R" ? "right" : bill.partySupport === "D" ? "left" : "center";
       setAnalyzing(false);
