@@ -409,24 +409,24 @@ function simSCOTUS(members, bill) {
 // ─── VIEWS ───
 const isFullHouse = HOU.length > 100;
 const VIEWS_MOB = {
-  idle: { x: 0, y: 0, w: 1280, h: 700 },
+  idle: { x: -30, y: -20, w: 1340, h: 740 },
   hou: isFullHouse ? { x: -30, y: 340, w: 660, h: 360 } : { x: 60, y: 420, w: 460, h: 260 },
   sen: { x: 20, y: -10, w: 560, h: 300 },
   exc: { x: 480, y: 80, w: 460, h: 360 },
   sct: { x: 830, y: 120, w: 440, h: 300 },
   hou_override: isFullHouse ? { x: -30, y: 340, w: 660, h: 360 } : { x: 60, y: 420, w: 460, h: 260 },
   sen_override: { x: 20, y: -10, w: 560, h: 300 },
-  done: { x: 0, y: 0, w: 1280, h: 700 },
+  done: { x: -30, y: -20, w: 1340, h: 740 },
 };
 const VIEWS_DT = {
-  idle: { x: 0, y: -20, w: 1380, h: 800 },
+  idle: { x: -40, y: -30, w: 1440, h: 840 },
   hou: isFullHouse ? { x: -30, y: 340, w: 660, h: 360 } : { x: 30, y: 400, w: 540, h: 300 },
   sen: { x: 10, y: -20, w: 580, h: 300 },
   exc: { x: 460, y: 50, w: 500, h: 430 },
   sct: { x: 830, y: 100, w: 440, h: 320 },
   hou_override: isFullHouse ? { x: -30, y: 340, w: 660, h: 360 } : { x: 30, y: 400, w: 540, h: 300 },
   sen_override: { x: 10, y: -20, w: 580, h: 300 },
-  done: { x: 0, y: -20, w: 1380, h: 800 },
+  done: { x: -40, y: -30, w: 1440, h: 840 },
 };
 
 function lerp(a, b, t) { return a + (b - a) * t; }
@@ -565,15 +565,14 @@ const BILL_NAME_MAX_WORDS = 6;
 
 // Detect absurd, violent, or unconstitutional bill proposals
 const ABSURD_PATTERNS = [
-  /\b(kill|murder|execute|exterminate|genocide|slaughter|massacre|eliminate|eradicate|purge|destroy|assassinate|behead|hang|shoot)\b.*\b(all|every|citizen|people|american|population|human|person|baby|babies|infant|child|children|everyone|men|women|president|vice president|senator|representative|judge|justice|official|politician|leader|speaker|governor)\b/,
+  /\b(kill|murder|execute|exterminate|genocide|slaughter|massacre|eliminate|eradicate|purge|destroy|assassinate|behead|hang|shoot)\b.*\b(all|every|citizen|people|american|population|human|person|baby|babies|infant|child|children|everyone|men|women|president|vice president|senator|representative|judge|justice|official|politician|leader|speaker|governor|trump|biden|harris|pence|obama|clinton|bush|pelosi|mcconnell|schumer)\b/,
+  // Short violent phrases (e.g. "kill X", "murder X") — catches name-based targeting
+  /\b(kill|murder|execute|assassinate|shoot|behead|hang|bomb|nuke|destroy|eliminate)\s+\w+/,
   /\b(ban|outlaw|prohibit|criminalize)\b.*\b(all|every|citizen|people|living|breathing|existing|life|freedom|rights)\b/,
   /\b(nuke|nuclear bomb|nuclear strike|nuke the)\b/,
   /\bdeclare war\b/,
   /\binvade \w+/,
   /\bwar (on|with) \w+/,
-  /\bbomb \w+/,
-  /\battack \w+/,
-  /\b(execute|assassinate|behead|hang|shoot|kill|murder)\b.{0,20}\b(the |our )?(president|vice president|speaker|chief justice|senator|congressman|mayor|governor)\b/,
 ];
 
 function analyzeBillText(text) {
@@ -604,14 +603,15 @@ function analyzeBillText(text) {
   }
 
   if (Object.keys(issues.weights).length === 0) {
-    issues.weights.government_spending = 0.6;
-    issues.positions.government_spending = 0.5;
-    issues.weights.civil_liberties = 0.7;
-    issues.positions.civil_liberties = 0.5;
+    // Unrecognized bill — make it controversial so it doesn't get unanimous votes
+    issues.weights.government_spending = 0.7;
+    issues.positions.government_spending = 0.25;
+    issues.weights.civil_liberties = 0.6;
+    issues.positions.civil_liberties = 0.30;
     issues.weights.criminal_justice = 0.5;
-    issues.positions.criminal_justice = 0.5;
-    constitutional.weights.individual_rights_vs_government = 0.6;
-    constitutional.positions.individual_rights_vs_government = 0.5;
+    issues.positions.criminal_justice = 0.35;
+    constitutional.weights.individual_rights_vs_government = 0.7;
+    constitutional.positions.individual_rights_vs_government = 0.30;
   }
 
   let totalWeight = 0, weightedLean = 0;
