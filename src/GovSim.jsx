@@ -349,13 +349,25 @@ const LOBBY_GROUPS = {
   tourism: ["US Travel Association", "Marriott", "Hilton", "American Hotel & Lodging Association"],
 };
 function getLobbyInfluence(member, bill) {
-  if (!member.interests || !bill.affectedIndustries) return null;
-  const overlap = member.interests.filter(i =>
+  if (!bill.affectedIndustries) return null;
+  // Build interests array from whatever data the member has
+  let interests = member.interests;
+  if (!Array.isArray(interests)) {
+    // Executive/SCOTUS: extract industry keywords from department_interests or other text fields
+    const text = [member.department_interests?.primary_mission, member.department_interests?.budget_priority,
+      member.department_interests?.regulatory_stance, member.department].filter(Boolean).join(" ").toLowerCase();
+    if (!text) return null;
+    interests = bill.affectedIndustries.filter(bi => text.includes(bi.toLowerCase()));
+    if (interests.length === 0) return null;
+  }
+  const overlap = interests.filter(i =>
     bill.affectedIndustries.some(bi => i.toLowerCase().includes(bi.toLowerCase()) || bi.toLowerCase().includes(i.toLowerCase()))
   );
   if (overlap.length === 0) return null;
-  const lobbySusceptibility = member.behavior?.lobby_susceptibility || 0;
-  if (lobbySusceptibility < 0.3) return null;
+  // Executive & SCOTUS always show lobby influence if there's industry overlap (no susceptibility gate)
+  const isExecOrCourt = member.ch === "exc" || member.ch === "sct";
+  const lobbySusceptibility = member.behavior?.lobby_susceptibility || member.executive_behavior?.lobby_susceptibility || (isExecOrCourt ? 0.5 : 0);
+  if (!isExecOrCourt && lobbySusceptibility < 0.3) return null;
   const avgPos = (() => {
     const ps = Object.entries(bill.issueWeights || {}).filter(([iss]) => bill.issuePositions?.[iss] !== undefined).map(([iss, w]) => ({ pos: bill.issuePositions[iss], w }));
     if (ps.length === 0) return 0.5;
@@ -910,6 +922,7 @@ export default function GovSim() {
           const p = positions[m.id]; if (!p) return null;
           const r = nr(m), c = nc(m), isH = hov?.id === m.id, revealed = snap.rv[m.id] !== undefined;
           const notable = NOTABLE.has(m.n);
+          const hasLobby = pol && !pol.isAbsurd && getLobbyInfluence(m, pol);
           return (
             <g key={m.id} style={{ cursor: "pointer" }}>
               {notable && <circle cx={p.x} cy={p.y} r={r + 3} fill="none" stroke={c} strokeWidth={1.5} opacity={0.6} className="gs-notable-ring" />}
@@ -920,6 +933,7 @@ export default function GovSim() {
                 className={`gs-member-circle${analyzing ? " gs-dot-pop-in" : ""}`}
                 style={{ transform: `scale(${revealed ? 1.3 : 1})`, transformOrigin: `${p.x}px ${p.y}px`, ...(analyzing ? { animationDelay: `${500 + idx * 8}ms` } : {}) }}
                 onMouseEnter={() => { if (!mob) setHov(m); }} onMouseLeave={() => { if (!mob) setHov(null); }} />
+              {hasLobby && <path d={`M${p.x},${p.y - r - 2.5} l1.8,3.2 -1.8,1 -1.8,-1z`} fill={hasLobby.strength === "Strong" ? "#c0392b" : "#b8860b"} opacity={0.9} style={{ pointerEvents: "none" }} />}
             </g>
           );
         })}
