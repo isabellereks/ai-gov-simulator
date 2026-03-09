@@ -181,6 +181,9 @@ const POLS = [
 
 // ─── VOTE FUNCTIONS ───
 function computeVote(member, bill) {
+  // Absurd/violent bills: ~95% vote no, tiny random chance of a few outliers
+  if (bill.isAbsurd) return Math.random() < 0.04;
+
   // For House members without multi-dimensional issues, use legacy method
   if (!member.issues) {
     const center = bill.issuePositions
@@ -247,6 +250,7 @@ function computeVote(member, bill) {
 }
 
 function computeVeto(president, cabinet, bill) {
+  if (bill.isAbsurd) return true; // Always veto absurd bills
   let alignment = 0, total = 0;
   for (const [issue, weight] of Object.entries(bill.issueWeights || {})) {
     if (president.issues?.[issue] !== undefined && bill.issuePositions?.[issue] !== undefined) {
@@ -670,7 +674,7 @@ function analyzeBillText(text) {
 
   const controversy_level = isAbsurd ? 1.0 : isGibberish ? 0.75 : (Math.abs(averageLean - 0.5) > 0.25 ? 0.7 : 0.4);
 
-  return { name, lean, partySupport, startChamber, controversy_level, issueWeights: issues.weights, issuePositions: issues.positions, constitutionalIssues: constitutional.weights, constitutionalPosition: constitutional.positions };
+  return { name, lean, partySupport, startChamber, controversy_level, isAbsurd, issueWeights: issues.weights, issuePositions: issues.positions, constitutionalIssues: constitutional.weights, constitutionalPosition: constitutional.positions };
 }
 
 // ─── RESPONSIVE HOOKS ───
