@@ -30,8 +30,8 @@ const POLS=[{name:"Secure Borders Act",center:.78,lean:"right"},{name:"Green New
 function vt(m,pol){return(1-Math.abs(m.i-pol.center)+(Math.random()-.5)*.35)>.5}
 function sim(ms,pol){const r=ms.map(m=>({...m,v:vt(m,pol)}));const y=r.filter(x=>x.v).length;return{r,y,n:r.length-y,ok:y>r.length/2}}
 
-const VIEWS_MOB={idle:{x:0,y:0,w:1280,h:700},hou:{x:60,y:420,w:460,h:260},sen:{x:60,y:0,w:460,h:240},exc:{x:540,y:170,w:320,h:260},sct:{x:830,y:170,w:440,h:260},done:{x:0,y:0,w:1280,h:700}};
-const VIEWS_DT={idle:{x:0,y:-20,w:1380,h:800},hou:{x:30,y:400,w:540,h:300},sen:{x:30,y:-20,w:540,h:280},exc:{x:480,y:120,w:440,h:340},sct:{x:830,y:150,w:440,h:260},done:{x:0,y:-20,w:1380,h:800}};
+const VIEWS_MOB={idle:{x:0,y:0,w:1280,h:700},hou:{x:60,y:420,w:460,h:260},sen:{x:60,y:0,w:460,h:240},exc:{x:540,y:170,w:320,h:260},sct:{x:830,y:170,w:440,h:260},hou_override:{x:60,y:420,w:460,h:260},sen_override:{x:60,y:0,w:460,h:240},done:{x:0,y:0,w:1280,h:700}};
+const VIEWS_DT={idle:{x:0,y:-20,w:1380,h:800},hou:{x:30,y:400,w:540,h:300},sen:{x:30,y:-20,w:540,h:280},exc:{x:480,y:120,w:440,h:340},sct:{x:830,y:150,w:440,h:260},hou_override:{x:30,y:400,w:540,h:300},sen_override:{x:30,y:-20,w:540,h:280},done:{x:0,y:-20,w:1380,h:800}};
 function lerp(a,b,t){return a+(b-a)*t}
 
 // ─── TIMELINE BUILDER ───
@@ -55,8 +55,29 @@ function buildTimeline(policy){
   ev.push({t,type:"stage",val:"exc"},{t,type:"counter",y:0,n:0});t+=1500;
   const signed=Math.abs(EXC[0].i-policy.center)<.35||Math.random()>.65;
   ev.push({t,type:"vote",id:EXC[0].id,v:signed},{t,type:"presResult",signed});
-  if(!signed){t+=1200;ev.push({t,type:"stage",val:"done"},{t,type:"outcome",s:"Vetoed"});return{events:ev,duration:t+2000}}
+  if(!signed){
+    // Veto override attempt — Congress needs 2/3 in both chambers
+    t+=1200;ev.push({t,type:"pause",next:"Veto Override – House"});t+=100;
+    // Reset votes for override
+    ev.push({t,type:"stage",val:"hou_override"},{t,type:"counter",y:0,n:0});t+=600;
+    // Re-vote house with higher threshold (2/3)
+    const hor=sim(HOU,policy);const hos=shuf(hor.r);let hoy=0,hon=0;
+    hos.forEach((m,i)=>{if(m.v)hoy++;else hon++;ev.push({t:t+i*30,type:"vote",id:m.id,v:m.v},{t:t+i*30,type:"counter",y:hoy,n:hon})});
+    t+=hos.length*30+400;const hOverride=hoy>=Math.ceil(HOU.length*2/3);
+    ev.push({t,type:"overrideResult",chamber:"House",ok:hOverride,y:hoy,n:hon});
+    if(!hOverride){t+=800;ev.push({t,type:"stage",val:"done"},{t,type:"outcome",s:"Vetoed"});return{events:ev,duration:t+2000}}
+    t+=600;ev.push({t,type:"pause",next:"Veto Override – Senate"});t+=100;
+    ev.push({t,type:"stage",val:"sen_override"},{t,type:"counter",y:0,n:0});t+=600;
+    const sor=sim(SEN,policy);const sos=shuf(sor.r);let soy=0,son=0;
+    sos.forEach((m,i)=>{if(m.v)soy++;else son++;ev.push({t:t+i*25,type:"vote",id:m.id,v:m.v},{t:t+i*25,type:"counter",y:soy,n:son})});
+    t+=sos.length*25+400;const sOverride=soy>=Math.ceil(SEN.length*2/3);
+    ev.push({t,type:"overrideResult",chamber:"Senate",ok:sOverride,y:soy,n:son});
+    if(!sOverride){t+=800;ev.push({t,type:"stage",val:"done"},{t,type:"outcome",s:"Vetoed"});return{events:ev,duration:t+2000}}
+    // Both chambers overrode — proceed to SCOTUS
+    t+=800;ev.push({t,type:"pause",next:"Supreme Court"});t+=100;
+  } else {
   t+=800;ev.push({t,type:"pause",next:"Supreme Court"});t+=100;
+  }
   // SCOTUS
   ev.push({t,type:"stage",val:"sct"},{t,type:"counter",y:0,n:0});
   const extreme=Math.abs(policy.center-.5)>.25;const challenged=extreme&&Math.random()<.55;
@@ -99,14 +120,14 @@ export default function GovSim(){
 
   // Derive state from playhead
   const snap=useMemo(()=>{
-    if(!timeline)return{stage:"idle",rv:{},cy:0,cn:0,hR:null,sR:null,pR:null,cR:null,out:null,paused:null};
-    const st={stage:"idle",rv:{},cy:0,cn:0,hR:null,sR:null,pR:null,cR:null,out:null,paused:null};
+    if(!timeline)return{stage:"idle",rv:{},cy:0,cn:0,hR:null,sR:null,pR:null,cR:null,ovr:null,out:null,paused:null};
+    const st={stage:"idle",rv:{},cy:0,cn:0,hR:null,sR:null,pR:null,cR:null,ovr:null,out:null,paused:null};
     for(const e of timeline.events){
       if(e.t>playhead)break;
       if(e.type==="stage")st.stage=e.val;if(e.type==="vote")st.rv[e.id]=e.v;
       if(e.type==="counter"){st.cy=e.y;st.cn=e.n}
       if(e.type==="houseResult")st.hR=e;if(e.type==="senateResult")st.sR=e;
-      if(e.type==="presResult")st.pR=e;if(e.type==="scotusResult")st.cR=e;
+      if(e.type==="presResult")st.pR=e;if(e.type==="overrideResult")st.ovr=e;if(e.type==="scotusResult")st.cR=e;
       if(e.type==="outcome")st.out=e;if(e.type==="pause")st.paused=e;
     }
     if(st.paused){const pt=st.paused.t;const nx=timeline.events.filter(e=>e.t>pt&&e.type!=="pause");if(nx.length>0&&playhead>nx[0].t)st.paused=null}
@@ -152,7 +173,7 @@ export default function GovSim(){
     if(!timeline)return[];const so=[];
     for(const e of timeline.events){if(e.type==="stage"&&e.val!=="done"){if(!so.length||so[so.length-1].val!==e.val)so.push({val:e.val,start:e.t})}if(e.type==="stage"&&e.val==="done"&&so.length)so[so.length-1].end=e.t}
     so.forEach((s,i)=>{if(!s.end)s.end=i<so.length-1?so[i+1].start:timeline.duration});
-    const lb={hou:"House",sen:"Senate",exc:"President",sct:"Court"};
+    const lb={hou:"House",sen:"Senate",exc:"President",sct:"Court",hou_override:"H Override",sen_override:"S Override"};
     return so.map(s=>({label:lb[s.val]||"",start:s.start/timeline.duration,end:s.end/timeline.duration,mid:((s.start+s.end)/2)/timeline.duration}));
   },[timeline]);
 
@@ -168,7 +189,7 @@ export default function GovSim(){
   const vbStr=`${vb.x} ${vb.y} ${vb.w} ${vb.h}`;
   const pct=timeline?Math.min(1,playhead/timeline.duration):0;
   const isActive=snap.stage!=="idle"&&snap.stage!=="done";
-  const stageTitle={hou:"House Vote",sen:"Senate Vote",exc:"Presidential Action",sct:"Supreme Court Review"};
+  const stageTitle={hou:"House Vote",sen:"Senate Vote",exc:"Presidential Action",sct:"Supreme Court Review",hou_override:"Veto Override – House",sen_override:"Veto Override – Senate"};
 
   // ─── Shared overlay card style ───
   const cardStyle={background:C.card,border:`1px solid ${C.border}`,borderRadius:R.lg,boxShadow:S.md};
@@ -208,14 +229,14 @@ export default function GovSim(){
             <span style={{fontSize:mob?16:22,fontWeight:400,color:C.text}}>{pol.name}</span>
           </div>}
         </div>
-        {pol&&<div style={{display:"flex",gap:mob?6:10}}>
-          {["hou","sen","exc","sct"].map((s,i)=>{const labels=mob?["H","S","P","C"]:["House","Senate","President","Court"];const done=["hou","sen","exc","sct"].indexOf(snap.stage)>i||snap.stage==="done";const act=snap.stage===s;
+        {pol&&(()=>{const hasOverride=snap.pR&&!snap.pR.signed;const stages=hasOverride?["hou","sen","exc","hou_override","sen_override","sct"]:["hou","sen","exc","sct"];const labelsM=hasOverride?["H","S","P","H²","S²","C"]:["H","S","P","C"];const labelsD=hasOverride?["House","Senate","President","H Override","S Override","Court"]:["House","Senate","President","Court"];const labels=mob?labelsM:labelsD;
+          return <div style={{display:"flex",gap:mob?6:10,flexWrap:"wrap"}}>
+          {stages.map((s,i)=>{const done=stages.indexOf(snap.stage)>i||snap.stage==="done";const act=snap.stage===s;
             return(<div key={s} style={{display:"flex",alignItems:"center",gap:mob?3:5}}>
               <div style={{width:mob?6:8,height:mob?6:8,borderRadius:"50%",background:act?C.rep:done?C.yea:C.border,boxShadow:act?`0 0 8px ${C.rep}66`:"none"}}/>
               <span style={{fontSize:mob?10:13,fontFamily:SANS,color:act?C.text:done?C.yeaMute:C.textMute,fontWeight:act?700:400}}>{labels[i]}</span>
-              {i<3&&<span style={{color:C.border,fontSize:mob?9:11}}>→</span>}
-            </div>)})}
-        </div>}
+              {i<stages.length-1&&<span style={{color:C.border,fontSize:mob?9:11}}>→</span>}
+            </div>)})}</div>})()}
       </div>
 
       {/* ─── Watermark (removed) ─── */}
@@ -223,7 +244,7 @@ export default function GovSim(){
       {/* ─── Continue prompt ─── */}
       {snap.paused&&!playing&&<div style={{position:"absolute",bottom:mob?64:68,left:"50%",transform:"translateX(-50%)",textAlign:"center",zIndex:20,...cardStyle,padding:mob?"12px 18px":"16px 32px",maxWidth:mob?"90vw":"none"}}>
         <div style={{fontSize:mob?11:13,color:C.textMute,fontFamily:SANS,fontWeight:500,marginBottom:mob?6:10}}>
-          {snap.hR&&!snap.sR?`House ${snap.hR.ok?"passed":"failed"} ${snap.hR.y}–${snap.hR.n}`:snap.sR&&!snap.pR?`Senate ${snap.sR.ok?"passed":"failed"} ${snap.sR.y}–${snap.sR.n}`:snap.pR?`President ${snap.pR.signed?"signed":"vetoed"}`:""}
+          {snap.ovr?`${snap.ovr.chamber} override ${snap.ovr.ok?"passed":"failed"} ${snap.ovr.y}–${snap.ovr.n}`:snap.hR&&!snap.sR?`House ${snap.hR.ok?"passed":"failed"} ${snap.hR.y}–${snap.hR.n}`:snap.sR&&!snap.pR?`Senate ${snap.sR.ok?"passed":"failed"} ${snap.sR.y}–${snap.sR.n}`:snap.pR?`President ${snap.pR.signed?"signed":"vetoed"}`:""}
         </div>
         <div onClick={()=>{setPlaying(true);setPlayhead(p=>p+150)}} style={{display:"inline-flex",alignItems:"center",gap:6,padding:mob?"8px 18px":"10px 28px",borderRadius:R.md,background:C.bar,color:C.bg,cursor:"pointer",fontSize:mob?12:14,fontFamily:SANS,fontWeight:600,pointerEvents:"auto"}}>
           Continue to {snap.paused.next}<span style={{fontSize:mob?13:16}}>→</span>
@@ -231,7 +252,7 @@ export default function GovSim(){
       </div>}
 
       {/* ─── Live counter ─── */}
-      {isActive&&!snap.out&&!(snap.paused&&!playing)&&(snap.stage==="hou"||snap.stage==="sen"||snap.stage==="sct")&&(snap.cy>0||snap.cn>0)&&
+      {isActive&&!snap.out&&!(snap.paused&&!playing)&&(snap.stage==="hou"||snap.stage==="sen"||snap.stage==="sct"||snap.stage==="hou_override"||snap.stage==="sen_override")&&(snap.cy>0||snap.cn>0)&&
         <div style={{position:"absolute",bottom:mob?64:68,left:"50%",transform:"translateX(-50%)",display:"flex",gap:mob?20:36,alignItems:"baseline",zIndex:10,...cardStyle,padding:mob?"10px 24px":"14px 40px"}}>
           <div style={{textAlign:"center"}}><div style={{fontSize:mob?32:48,fontWeight:300,color:C.yea,lineHeight:1,fontFamily:SANS}}>{snap.cy}</div><div style={{fontSize:mob?10:12,color:C.yeaMute,fontFamily:SANS,fontWeight:600,letterSpacing:2,marginTop:2}}>YEA</div></div>
           <div style={{width:1,height:mob?32:48,background:C.border}}/>
@@ -247,10 +268,19 @@ export default function GovSim(){
           </div>
         </div>}
 
+      {/* ─── No judicial review ─── */}
+      {snap.cR&&!snap.cR.ch&&snap.stage==="sct"&&!snap.out&&!(snap.paused&&!playing)&&
+        <div style={{position:"absolute",bottom:mob?64:68,left:"50%",transform:"translateX(-50%)",textAlign:"center",zIndex:10,maxWidth:mob?"90vw":"none"}}>
+          <div style={{background:C.card,borderRadius:R.lg,padding:mob?"14px 28px":"18px 44px",boxShadow:S.lg,border:`1px solid ${C.border}`}}>
+            <div style={{fontSize:mob?10:11,fontFamily:SANS,fontWeight:600,letterSpacing:2,textTransform:"uppercase",color:C.textMute,marginBottom:4}}>Supreme Court</div>
+            <div style={{fontSize:mob?18:24,fontWeight:600,fontFamily:SANS,color:C.textMid}}>No Judicial Challenge</div>
+          </div>
+        </div>}
+
       {/* ─── Outcome ─── */}
       {snap.out&&(()=>{
         const won=snap.out.s==="Enacted";
-        const label={Enacted:"Law Enacted",Defeated:`Defeated in the ${snap.out.w}`,Vetoed:"Presidential Veto",Unconstitutional:"Ruled Unconstitutional"}[snap.out.s];
+        const label={Enacted:"Law Enacted",Defeated:`Defeated in the ${snap.out.w}`,Vetoed:"Veto Sustained",Unconstitutional:"Ruled Unconstitutional"}[snap.out.s];
         const accent=won?C.yea:C.nay;
         return <div style={{position:"absolute",bottom:mob?64:68,left:"50%",transform:"translateX(-50%)",textAlign:"center",zIndex:20,maxWidth:mob?"90vw":"none"}}>
           <div style={{background:C.card,borderRadius:R.lg,padding:mob?"16px 28px":"22px 52px",boxShadow:S.lg,border:`1px solid ${C.border}`}}>
