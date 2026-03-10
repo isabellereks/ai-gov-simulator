@@ -110,16 +110,16 @@ const POLS = [
     issueWeights: { immigration: 0.95, government_spending: 0.4, criminal_justice: 0.35, defense_military: 0.3 },
     issuePositions: { immigration: 0.92, government_spending: 0.75, criminal_justice: 0.80, defense_military: 0.80 },
     affectedIndustries: ["defense", "construction", "agriculture"],
-    constitutionalIssues: { executive_power: 0.5, federal_vs_state_power: 0.45, individual_rights_vs_government: 0.3 },
-    constitutionalPosition: { executive_power: 0.72, federal_vs_state_power: 0.65, individual_rights_vs_government: 0.65 },
+    constitutionalIssues: { executive_power: 0.5, federal_vs_state_power: 0.45, individual_rights_vs_government: 0.3, immigration_executive_authority: 0.5 },
+    constitutionalPosition: { executive_power: 0.72, federal_vs_state_power: 0.65, individual_rights_vs_government: 0.65, immigration_executive_authority: 0.72 },
   },
   {
     name: "Green New Deal 2.0", lean: "left", partySupport: "D",
     issueWeights: { climate_energy: 0.95, government_spending: 0.8, labor_unions: 0.6, taxes_spending: 0.5, education: 0.3 },
     issuePositions: { climate_energy: 0.08, government_spending: 0.15, labor_unions: 0.12, taxes_spending: 0.15, education: 0.18 },
     affectedIndustries: ["energy", "manufacturing", "construction", "transportation"],
-    constitutionalIssues: { regulatory_authority_admin_state: 0.7, commerce_clause_scope: 0.5, federal_vs_state_power: 0.4 },
-    constitutionalPosition: { regulatory_authority_admin_state: 0.25, commerce_clause_scope: 0.30, federal_vs_state_power: 0.30 },
+    constitutionalIssues: { regulatory_authority_admin_state: 0.7, commerce_clause_scope: 0.5, federal_vs_state_power: 0.4, environmental_regulation: 0.6 },
+    constitutionalPosition: { regulatory_authority_admin_state: 0.25, commerce_clause_scope: 0.30, federal_vs_state_power: 0.30, environmental_regulation: 0.18 },
   },
   {
     name: "Tax Relief & Jobs Act", lean: "right", partySupport: "R", startChamber: "hou",
@@ -176,6 +176,194 @@ const POLS = [
     affectedIndustries: ["law enforcement", "legal services"],
     constitutionalIssues: { criminal_defendant_rights: 0.7, equal_protection_discrimination: 0.5, individual_rights_vs_government: 0.4 },
     constitutionalPosition: { criminal_defendant_rights: 0.30, equal_protection_discrimination: 0.30, individual_rights_vs_government: 0.35 },
+  },
+  // ─── FOREIGN POLICY / CURRENT EVENTS ───
+  {
+    name: "Israel Defense Funding Act", lean: "right", partySupport: "R",
+    issueWeights: { foreign_policy_hawks: 0.9, defense_military: 0.7, government_spending: 0.5 },
+    issuePositions: { foreign_policy_hawks: 0.88, defense_military: 0.82, government_spending: 0.70 },
+    affectedIndustries: ["defense", "aerospace"],
+    constitutionalIssues: { executive_power: 0.5 },
+    constitutionalPosition: { executive_power: 0.70 },
+  },
+  {
+    name: "Palestine Humanitarian Aid Act", lean: "left", partySupport: "D",
+    issueWeights: { foreign_policy_hawks: 0.8, government_spending: 0.6, civil_liberties: 0.4 },
+    issuePositions: { foreign_policy_hawks: 0.15, government_spending: 0.18, civil_liberties: 0.20 },
+    affectedIndustries: ["humanitarian", "nonprofit"],
+    constitutionalIssues: { executive_power: 0.4 },
+    constitutionalPosition: { executive_power: 0.30 },
+  },
+  {
+    name: "Iran Sanctions Reinforcement Act", lean: "right", partySupport: "R",
+    issueWeights: { foreign_policy_hawks: 0.9, defense_military: 0.6, trade_tariffs: 0.5 },
+    issuePositions: { foreign_policy_hawks: 0.85, defense_military: 0.80, trade_tariffs: 0.82 },
+    affectedIndustries: ["defense", "energy", "finance"],
+    constitutionalIssues: { executive_power: 0.5, commerce_clause_scope: 0.3 },
+    constitutionalPosition: { executive_power: 0.70, commerce_clause_scope: 0.60 },
+  },
+  {
+    name: "Ukraine Defense Aid Act", lean: "center", partySupport: "bipartisan",
+    issueWeights: { foreign_policy_hawks: 0.9, defense_military: 0.7, government_spending: 0.6 },
+    issuePositions: { foreign_policy_hawks: 0.25, defense_military: 0.30, government_spending: 0.20 },
+    affectedIndustries: ["defense", "aerospace"],
+    constitutionalIssues: { executive_power: 0.4 },
+    constitutionalPosition: { executive_power: 0.35 },
+  },
+  // ─── SOCIAL / CULTURE WAR ───
+  {
+    name: "Women's Reproductive Freedom Act", lean: "left", partySupport: "D",
+    issueWeights: { abortion_social: 0.95, civil_liberties: 0.6, healthcare: 0.4 },
+    issuePositions: { abortion_social: 0.05, civil_liberties: 0.15, healthcare: 0.10 },
+    affectedIndustries: ["healthcare"],
+    constitutionalIssues: { abortion_reproductive_rights: 0.9, individual_rights_vs_government: 0.5, equal_protection_discrimination: 0.4 },
+    constitutionalPosition: { abortion_reproductive_rights: 0.08, individual_rights_vs_government: 0.20, equal_protection_discrimination: 0.15 },
+  },
+  {
+    name: "Heartbeat Protection Act", lean: "right", partySupport: "R",
+    issueWeights: { abortion_social: 0.95, civil_liberties: 0.4 },
+    issuePositions: { abortion_social: 0.92, civil_liberties: 0.75 },
+    affectedIndustries: ["healthcare"],
+    constitutionalIssues: { abortion_reproductive_rights: 0.7, federal_vs_state_power: 0.6, individual_rights_vs_government: 0.4 },
+    constitutionalPosition: { abortion_reproductive_rights: 0.88, federal_vs_state_power: 0.72, individual_rights_vs_government: 0.75 },
+  },
+  {
+    name: "Respect for Marriage Act 2.0", lean: "left", partySupport: "D",
+    issueWeights: { abortion_social: 0.7, civil_liberties: 0.8 },
+    issuePositions: { abortion_social: 0.10, civil_liberties: 0.15 },
+    affectedIndustries: ["legal services"],
+    constitutionalIssues: { equal_protection_discrimination: 0.8, religious_liberty: 0.5 },
+    constitutionalPosition: { equal_protection_discrimination: 0.15, religious_liberty: 0.28 },
+  },
+  {
+    name: "Religious Freedom Restoration Act", lean: "right", partySupport: "R",
+    issueWeights: { abortion_social: 0.5, civil_liberties: 0.6 },
+    issuePositions: { abortion_social: 0.80, civil_liberties: 0.72 },
+    affectedIndustries: ["legal services", "nonprofit"],
+    constitutionalIssues: { religious_liberty: 0.9, free_speech_1A: 0.5 },
+    constitutionalPosition: { religious_liberty: 0.88, free_speech_1A: 0.62 },
+  },
+  {
+    name: "Trans Athletes & Title IX Clarity Act", lean: "right", partySupport: "R",
+    issueWeights: { abortion_social: 0.8, education: 0.5, civil_liberties: 0.4 },
+    issuePositions: { abortion_social: 0.85, education: 0.78, civil_liberties: 0.72 },
+    affectedIndustries: ["education"],
+    constitutionalIssues: { equal_protection_discrimination: 0.7, individual_rights_vs_government: 0.4 },
+    constitutionalPosition: { equal_protection_discrimination: 0.72, individual_rights_vs_government: 0.68 },
+  },
+  {
+    name: "Gender-Affirming Care Protection Act", lean: "left", partySupport: "D",
+    issueWeights: { healthcare: 0.7, abortion_social: 0.7, civil_liberties: 0.6 },
+    issuePositions: { healthcare: 0.08, abortion_social: 0.08, civil_liberties: 0.12 },
+    affectedIndustries: ["healthcare", "pharmaceuticals"],
+    constitutionalIssues: { equal_protection_discrimination: 0.7, individual_rights_vs_government: 0.5 },
+    constitutionalPosition: { equal_protection_discrimination: 0.12, individual_rights_vs_government: 0.20 },
+  },
+  // ─── ECONOMIC / EDUCATION ───
+  {
+    name: "Free College for All Act", lean: "left", partySupport: "D",
+    issueWeights: { education: 0.95, government_spending: 0.8, taxes_spending: 0.7 },
+    issuePositions: { education: 0.08, government_spending: 0.10, taxes_spending: 0.12 },
+    affectedIndustries: ["education", "finance"],
+    constitutionalIssues: { commerce_clause_scope: 0.3 },
+    constitutionalPosition: { commerce_clause_scope: 0.25 },
+  },
+  {
+    name: "National Right to Work Act", lean: "right", partySupport: "R",
+    issueWeights: { labor_unions: 0.95, civil_liberties: 0.4 },
+    issuePositions: { labor_unions: 0.90, civil_liberties: 0.80 },
+    affectedIndustries: ["manufacturing", "services"],
+    constitutionalIssues: { free_speech_1A: 0.4, commerce_clause_scope: 0.3 },
+    constitutionalPosition: { free_speech_1A: 0.70, commerce_clause_scope: 0.65 },
+  },
+  {
+    name: "Universal Basic Income Pilot Act", lean: "left", partySupport: "D",
+    issueWeights: { government_spending: 0.9, taxes_spending: 0.8, labor_unions: 0.5 },
+    issuePositions: { government_spending: 0.08, taxes_spending: 0.10, labor_unions: 0.15 },
+    affectedIndustries: ["finance", "technology"],
+    constitutionalIssues: { commerce_clause_scope: 0.3 },
+    constitutionalPosition: { commerce_clause_scope: 0.25 },
+  },
+  {
+    name: "Housing Affordability Act", lean: "center", partySupport: "bipartisan",
+    issueWeights: { government_spending: 0.7, taxes_spending: 0.5, labor_unions: 0.3 },
+    issuePositions: { government_spending: 0.35, taxes_spending: 0.40, labor_unions: 0.40 },
+    affectedIndustries: ["real estate", "construction"],
+    constitutionalIssues: { commerce_clause_scope: 0.2 },
+    constitutionalPosition: { commerce_clause_scope: 0.42 },
+  },
+  // ─── OTHER HOT TOPICS ───
+  {
+    name: "Ban Assault Weapons Act", lean: "left", partySupport: "D",
+    issueWeights: { gun_rights: 0.95, criminal_justice: 0.5, civil_liberties: 0.4 },
+    issuePositions: { gun_rights: 0.08, criminal_justice: 0.25, civil_liberties: 0.20 },
+    affectedIndustries: ["firearms", "defense"],
+    constitutionalIssues: { gun_rights_2A: 0.9, individual_rights_vs_government: 0.5 },
+    constitutionalPosition: { gun_rights_2A: 0.10, individual_rights_vs_government: 0.20 },
+  },
+  {
+    name: "Social Media Child Safety Act", lean: "center", partySupport: "bipartisan",
+    issueWeights: { tech_regulation: 0.9, civil_liberties: 0.5, education: 0.3 },
+    issuePositions: { tech_regulation: 0.35, civil_liberties: 0.40, education: 0.35 },
+    affectedIndustries: ["technology", "media"],
+    constitutionalIssues: { free_speech_1A: 0.6, commerce_clause_scope: 0.4 },
+    constitutionalPosition: { free_speech_1A: 0.42, commerce_clause_scope: 0.40 },
+  },
+  {
+    name: "Federal Marijuana Legalization Act", lean: "left", partySupport: "D",
+    issueWeights: { criminal_justice: 0.7, civil_liberties: 0.6, government_spending: 0.3 },
+    issuePositions: { criminal_justice: 0.25, civil_liberties: 0.20, government_spending: 0.30 },
+    affectedIndustries: ["agriculture", "pharmaceuticals", "retail"],
+    constitutionalIssues: { federal_vs_state_power: 0.6, commerce_clause_scope: 0.4 },
+    constitutionalPosition: { federal_vs_state_power: 0.30, commerce_clause_scope: 0.35 },
+  },
+  {
+    name: "TikTok & Foreign App Ban Act", lean: "center", partySupport: "bipartisan",
+    issueWeights: { tech_regulation: 0.8, defense_military: 0.5, trade_tariffs: 0.4, civil_liberties: 0.3 },
+    issuePositions: { tech_regulation: 0.65, defense_military: 0.72, trade_tariffs: 0.78, civil_liberties: 0.60 },
+    affectedIndustries: ["technology", "telecommunications"],
+    constitutionalIssues: { free_speech_1A: 0.6, commerce_clause_scope: 0.5 },
+    constitutionalPosition: { free_speech_1A: 0.58, commerce_clause_scope: 0.60 },
+  },
+  {
+    name: "Balanced Budget Amendment Act", lean: "right", partySupport: "R",
+    issueWeights: { government_spending: 0.95, taxes_spending: 0.8 },
+    issuePositions: { government_spending: 0.92, taxes_spending: 0.82 },
+    affectedIndustries: ["finance"],
+    constitutionalIssues: { federal_vs_state_power: 0.4 },
+    constitutionalPosition: { federal_vs_state_power: 0.70 },
+  },
+  {
+    name: "Puerto Rico Statehood Act", lean: "left", partySupport: "D",
+    issueWeights: { government_spending: 0.5, civil_liberties: 0.6 },
+    issuePositions: { government_spending: 0.25, civil_liberties: 0.18 },
+    affectedIndustries: ["government", "services"],
+    constitutionalIssues: { equal_protection_discrimination: 0.5, federal_vs_state_power: 0.4 },
+    constitutionalPosition: { equal_protection_discrimination: 0.18, federal_vs_state_power: 0.25 },
+  },
+  {
+    name: "AI Deepfake Election Disclosure Act", lean: "center", partySupport: "bipartisan",
+    issueWeights: { tech_regulation: 0.9, civil_liberties: 0.5 },
+    issuePositions: { tech_regulation: 0.30, civil_liberties: 0.35 },
+    affectedIndustries: ["technology", "media"],
+    constitutionalIssues: { free_speech_1A: 0.7, regulatory_authority_admin_state: 0.4 },
+    constitutionalPosition: { free_speech_1A: 0.40, regulatory_authority_admin_state: 0.30 },
+  },
+  {
+    name: "Birthright Citizenship Protection Act", lean: "left", partySupport: "D",
+    issueWeights: { immigration: 0.9, civil_liberties: 0.7 },
+    issuePositions: { immigration: 0.08, civil_liberties: 0.10 },
+    affectedIndustries: ["legal services"],
+    constitutionalIssues: { equal_protection_discrimination: 0.7, immigration_executive_authority: 0.6, individual_rights_vs_government: 0.5 },
+    constitutionalPosition: { equal_protection_discrimination: 0.12, immigration_executive_authority: 0.15, individual_rights_vs_government: 0.18 },
+  },
+  {
+    name: "DACA Dreamer Pathway Act", lean: "left", partySupport: "D",
+    issueWeights: { immigration: 0.95, education: 0.4, civil_liberties: 0.5 },
+    issuePositions: { immigration: 0.10, education: 0.15, civil_liberties: 0.12 },
+    affectedIndustries: ["education", "agriculture", "services"],
+    constitutionalIssues: { immigration_executive_authority: 0.7, executive_power: 0.5, equal_protection_discrimination: 0.3 },
+    constitutionalPosition: { immigration_executive_authority: 0.18, executive_power: 0.25, equal_protection_discrimination: 0.20 },
   },
 ];
 
@@ -386,6 +574,20 @@ function getLobbyInfluence(member, bill) {
 
 function getVoteReason(member, bill) {
   if (!bill?.issueWeights) return null;
+  if (member.ch === "exc" && member.r === "President") {
+    if (!member.issues) return null;
+    let maxW = 0, maxIssue = null;
+    for (const [issue, weight] of Object.entries(bill.issueWeights || {})) {
+      if (weight > maxW && member.issues[issue] !== undefined) { maxW = weight; maxIssue = issue; }
+    }
+    if (!maxIssue) return null;
+    const memberPos = member.issues[maxIssue];
+    const billPos = bill.issuePositions?.[maxIssue] ?? 0.5;
+    const aligned = Math.abs(memberPos - billPos) < 0.3;
+    const dir = ISSUE_DIR[maxIssue];
+    if (!dir) return (aligned ? "Supports " : "Opposes ") + maxIssue.replace(/_/g, " ");
+    return (aligned ? "Supports " : "Opposes ") + (memberPos > 0.5 ? dir[1] : dir[0]);
+  }
   if (member.ch === "sct") {
     if (!bill.constitutionalIssues || !member.constitutional_issues) return null;
     let maxW = 0, maxIssue = null;
@@ -1124,7 +1326,7 @@ export default function GovSim() {
           </div>
 
           {/* Preset policies */}
-          <Card className="shadow-[var(--shadow-sm),var(--shadow-lg)] overflow-hidden !p-0">
+          <Card className="shadow-[var(--shadow-sm),var(--shadow-lg)] overflow-hidden !p-0" style={{ maxHeight: mob ? "40vh" : "50vh", overflowY: "auto" }}>
             {POLS.map((p, idx) => (
               <div key={idx} className="gs-preset-item gs-interactive" onClick={() => go(p)}
                 style={{ padding: mob ? "10px 16px" : "11px 20px", cursor: "pointer", borderBottom: idx < POLS.length - 1 ? `1px solid ${C.borderLight}` : "none", display: "flex", alignItems: "center", gap: mob ? 8 : 11 }}>
