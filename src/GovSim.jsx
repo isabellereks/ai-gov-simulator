@@ -4,6 +4,7 @@ import { Button } from "@/src/components/ui/button";
 import { Card, CardTitle, CardContent } from "@/src/components/ui/card";
 import { Input } from "@/src/components/ui/input";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from "@/src/components/ui/dialog";
+import BattleSystem, { BATTLE_CLASSES } from "./BattleSim";
 
 // ─── DESIGN TOKENS ───
 const C = {
@@ -29,6 +30,8 @@ const S = {
 const NOTABLE = new Set([
   "Ted Cruz", "Bernie Sanders", "Hakeem Jeffries",
   "Mike Johnson", "Chuck Schumer", "Alexandria Ocasio-Cortez",
+  "John Thune", "Susan Collins", "Lindsey Graham",
+  "Mitch McConnell", "Elizabeth Warren",
 ]);
 
 // ─── ISSUE LABELS ───
@@ -110,16 +113,16 @@ const POLS = [
     issueWeights: { immigration: 0.95, government_spending: 0.4, criminal_justice: 0.35, defense_military: 0.3 },
     issuePositions: { immigration: 0.92, government_spending: 0.75, criminal_justice: 0.80, defense_military: 0.80 },
     affectedIndustries: ["defense", "construction", "agriculture"],
-    constitutionalIssues: { executive_power: 0.5, federal_vs_state_power: 0.45, individual_rights_vs_government: 0.3 },
-    constitutionalPosition: { executive_power: 0.72, federal_vs_state_power: 0.65, individual_rights_vs_government: 0.65 },
+    constitutionalIssues: { executive_power: 0.5, federal_vs_state_power: 0.45, individual_rights_vs_government: 0.3, immigration_executive_authority: 0.5 },
+    constitutionalPosition: { executive_power: 0.72, federal_vs_state_power: 0.65, individual_rights_vs_government: 0.65, immigration_executive_authority: 0.72 },
   },
   {
     name: "Green New Deal 2.0", lean: "left", partySupport: "D",
     issueWeights: { climate_energy: 0.95, government_spending: 0.8, labor_unions: 0.6, taxes_spending: 0.5, education: 0.3 },
     issuePositions: { climate_energy: 0.08, government_spending: 0.15, labor_unions: 0.12, taxes_spending: 0.15, education: 0.18 },
     affectedIndustries: ["energy", "manufacturing", "construction", "transportation"],
-    constitutionalIssues: { regulatory_authority_admin_state: 0.7, commerce_clause_scope: 0.5, federal_vs_state_power: 0.4 },
-    constitutionalPosition: { regulatory_authority_admin_state: 0.25, commerce_clause_scope: 0.30, federal_vs_state_power: 0.30 },
+    constitutionalIssues: { regulatory_authority_admin_state: 0.7, commerce_clause_scope: 0.5, federal_vs_state_power: 0.4, environmental_regulation: 0.6 },
+    constitutionalPosition: { regulatory_authority_admin_state: 0.25, commerce_clause_scope: 0.30, federal_vs_state_power: 0.30, environmental_regulation: 0.18 },
   },
   {
     name: "Tax Relief & Jobs Act", lean: "right", partySupport: "R", startChamber: "hou",
@@ -176,6 +179,194 @@ const POLS = [
     affectedIndustries: ["law enforcement", "legal services"],
     constitutionalIssues: { criminal_defendant_rights: 0.7, equal_protection_discrimination: 0.5, individual_rights_vs_government: 0.4 },
     constitutionalPosition: { criminal_defendant_rights: 0.30, equal_protection_discrimination: 0.30, individual_rights_vs_government: 0.35 },
+  },
+  // ─── FOREIGN POLICY / CURRENT EVENTS ───
+  {
+    name: "Israel Defense Funding Act", lean: "right", partySupport: "R",
+    issueWeights: { foreign_policy_hawks: 0.9, defense_military: 0.7, government_spending: 0.5 },
+    issuePositions: { foreign_policy_hawks: 0.88, defense_military: 0.82, government_spending: 0.70 },
+    affectedIndustries: ["defense", "aerospace"],
+    constitutionalIssues: { executive_power: 0.5 },
+    constitutionalPosition: { executive_power: 0.70 },
+  },
+  {
+    name: "Palestine Humanitarian Aid Act", lean: "left", partySupport: "D",
+    issueWeights: { foreign_policy_hawks: 0.8, government_spending: 0.6, civil_liberties: 0.4 },
+    issuePositions: { foreign_policy_hawks: 0.15, government_spending: 0.18, civil_liberties: 0.20 },
+    affectedIndustries: ["humanitarian", "nonprofit"],
+    constitutionalIssues: { executive_power: 0.4 },
+    constitutionalPosition: { executive_power: 0.30 },
+  },
+  {
+    name: "Iran Sanctions Reinforcement Act", lean: "right", partySupport: "R",
+    issueWeights: { foreign_policy_hawks: 0.9, defense_military: 0.6, trade_tariffs: 0.5 },
+    issuePositions: { foreign_policy_hawks: 0.85, defense_military: 0.80, trade_tariffs: 0.82 },
+    affectedIndustries: ["defense", "energy", "finance"],
+    constitutionalIssues: { executive_power: 0.5, commerce_clause_scope: 0.3 },
+    constitutionalPosition: { executive_power: 0.70, commerce_clause_scope: 0.60 },
+  },
+  {
+    name: "Ukraine Defense Aid Act", lean: "center", partySupport: "bipartisan",
+    issueWeights: { foreign_policy_hawks: 0.9, defense_military: 0.7, government_spending: 0.6 },
+    issuePositions: { foreign_policy_hawks: 0.25, defense_military: 0.30, government_spending: 0.20 },
+    affectedIndustries: ["defense", "aerospace"],
+    constitutionalIssues: { executive_power: 0.4 },
+    constitutionalPosition: { executive_power: 0.35 },
+  },
+  // ─── SOCIAL / CULTURE WAR ───
+  {
+    name: "Women's Reproductive Freedom Act", lean: "left", partySupport: "D",
+    issueWeights: { abortion_social: 0.95, civil_liberties: 0.6, healthcare: 0.4 },
+    issuePositions: { abortion_social: 0.05, civil_liberties: 0.15, healthcare: 0.10 },
+    affectedIndustries: ["healthcare"],
+    constitutionalIssues: { abortion_reproductive_rights: 0.9, individual_rights_vs_government: 0.5, equal_protection_discrimination: 0.4 },
+    constitutionalPosition: { abortion_reproductive_rights: 0.08, individual_rights_vs_government: 0.20, equal_protection_discrimination: 0.15 },
+  },
+  {
+    name: "Heartbeat Protection Act", lean: "right", partySupport: "R",
+    issueWeights: { abortion_social: 0.95, civil_liberties: 0.4 },
+    issuePositions: { abortion_social: 0.92, civil_liberties: 0.75 },
+    affectedIndustries: ["healthcare"],
+    constitutionalIssues: { abortion_reproductive_rights: 0.7, federal_vs_state_power: 0.6, individual_rights_vs_government: 0.4 },
+    constitutionalPosition: { abortion_reproductive_rights: 0.88, federal_vs_state_power: 0.72, individual_rights_vs_government: 0.75 },
+  },
+  {
+    name: "Respect for Marriage Act 2.0", lean: "left", partySupport: "D",
+    issueWeights: { abortion_social: 0.7, civil_liberties: 0.8 },
+    issuePositions: { abortion_social: 0.10, civil_liberties: 0.15 },
+    affectedIndustries: ["legal services"],
+    constitutionalIssues: { equal_protection_discrimination: 0.8, religious_liberty: 0.5 },
+    constitutionalPosition: { equal_protection_discrimination: 0.15, religious_liberty: 0.28 },
+  },
+  {
+    name: "Religious Freedom Restoration Act", lean: "right", partySupport: "R",
+    issueWeights: { abortion_social: 0.5, civil_liberties: 0.6 },
+    issuePositions: { abortion_social: 0.80, civil_liberties: 0.72 },
+    affectedIndustries: ["legal services", "nonprofit"],
+    constitutionalIssues: { religious_liberty: 0.9, free_speech_1A: 0.5 },
+    constitutionalPosition: { religious_liberty: 0.88, free_speech_1A: 0.62 },
+  },
+  {
+    name: "Trans Athletes & Title IX Clarity Act", lean: "right", partySupport: "R",
+    issueWeights: { abortion_social: 0.8, education: 0.5, civil_liberties: 0.4 },
+    issuePositions: { abortion_social: 0.85, education: 0.78, civil_liberties: 0.72 },
+    affectedIndustries: ["education"],
+    constitutionalIssues: { equal_protection_discrimination: 0.7, individual_rights_vs_government: 0.4 },
+    constitutionalPosition: { equal_protection_discrimination: 0.72, individual_rights_vs_government: 0.68 },
+  },
+  {
+    name: "Gender-Affirming Care Protection Act", lean: "left", partySupport: "D",
+    issueWeights: { healthcare: 0.7, abortion_social: 0.7, civil_liberties: 0.6 },
+    issuePositions: { healthcare: 0.08, abortion_social: 0.08, civil_liberties: 0.12 },
+    affectedIndustries: ["healthcare", "pharmaceuticals"],
+    constitutionalIssues: { equal_protection_discrimination: 0.7, individual_rights_vs_government: 0.5 },
+    constitutionalPosition: { equal_protection_discrimination: 0.12, individual_rights_vs_government: 0.20 },
+  },
+  // ─── ECONOMIC / EDUCATION ───
+  {
+    name: "Free College for All Act", lean: "left", partySupport: "D",
+    issueWeights: { education: 0.95, government_spending: 0.8, taxes_spending: 0.7 },
+    issuePositions: { education: 0.08, government_spending: 0.10, taxes_spending: 0.12 },
+    affectedIndustries: ["education", "finance"],
+    constitutionalIssues: { commerce_clause_scope: 0.3 },
+    constitutionalPosition: { commerce_clause_scope: 0.25 },
+  },
+  {
+    name: "National Right to Work Act", lean: "right", partySupport: "R",
+    issueWeights: { labor_unions: 0.95, civil_liberties: 0.4 },
+    issuePositions: { labor_unions: 0.90, civil_liberties: 0.80 },
+    affectedIndustries: ["manufacturing", "services"],
+    constitutionalIssues: { free_speech_1A: 0.4, commerce_clause_scope: 0.3 },
+    constitutionalPosition: { free_speech_1A: 0.70, commerce_clause_scope: 0.65 },
+  },
+  {
+    name: "Universal Basic Income Pilot Act", lean: "left", partySupport: "D",
+    issueWeights: { government_spending: 0.9, taxes_spending: 0.8, labor_unions: 0.5 },
+    issuePositions: { government_spending: 0.08, taxes_spending: 0.10, labor_unions: 0.15 },
+    affectedIndustries: ["finance", "technology"],
+    constitutionalIssues: { commerce_clause_scope: 0.3 },
+    constitutionalPosition: { commerce_clause_scope: 0.25 },
+  },
+  {
+    name: "Housing Affordability Act", lean: "center", partySupport: "bipartisan",
+    issueWeights: { government_spending: 0.7, taxes_spending: 0.5, labor_unions: 0.3 },
+    issuePositions: { government_spending: 0.35, taxes_spending: 0.40, labor_unions: 0.40 },
+    affectedIndustries: ["real estate", "construction"],
+    constitutionalIssues: { commerce_clause_scope: 0.2 },
+    constitutionalPosition: { commerce_clause_scope: 0.42 },
+  },
+  // ─── OTHER HOT TOPICS ───
+  {
+    name: "Ban Assault Weapons Act", lean: "left", partySupport: "D",
+    issueWeights: { gun_rights: 0.95, criminal_justice: 0.5, civil_liberties: 0.4 },
+    issuePositions: { gun_rights: 0.08, criminal_justice: 0.25, civil_liberties: 0.20 },
+    affectedIndustries: ["firearms", "defense"],
+    constitutionalIssues: { gun_rights_2A: 0.9, individual_rights_vs_government: 0.5 },
+    constitutionalPosition: { gun_rights_2A: 0.10, individual_rights_vs_government: 0.20 },
+  },
+  {
+    name: "Social Media Child Safety Act", lean: "center", partySupport: "bipartisan",
+    issueWeights: { tech_regulation: 0.9, civil_liberties: 0.5, education: 0.3 },
+    issuePositions: { tech_regulation: 0.35, civil_liberties: 0.40, education: 0.35 },
+    affectedIndustries: ["technology", "media"],
+    constitutionalIssues: { free_speech_1A: 0.6, commerce_clause_scope: 0.4 },
+    constitutionalPosition: { free_speech_1A: 0.42, commerce_clause_scope: 0.40 },
+  },
+  {
+    name: "Federal Marijuana Legalization Act", lean: "left", partySupport: "D",
+    issueWeights: { criminal_justice: 0.7, civil_liberties: 0.6, government_spending: 0.3 },
+    issuePositions: { criminal_justice: 0.25, civil_liberties: 0.20, government_spending: 0.30 },
+    affectedIndustries: ["agriculture", "pharmaceuticals", "retail"],
+    constitutionalIssues: { federal_vs_state_power: 0.6, commerce_clause_scope: 0.4 },
+    constitutionalPosition: { federal_vs_state_power: 0.30, commerce_clause_scope: 0.35 },
+  },
+  {
+    name: "TikTok & Foreign App Ban Act", lean: "center", partySupport: "bipartisan",
+    issueWeights: { tech_regulation: 0.8, defense_military: 0.5, trade_tariffs: 0.4, civil_liberties: 0.3 },
+    issuePositions: { tech_regulation: 0.65, defense_military: 0.72, trade_tariffs: 0.78, civil_liberties: 0.60 },
+    affectedIndustries: ["technology", "telecommunications"],
+    constitutionalIssues: { free_speech_1A: 0.6, commerce_clause_scope: 0.5 },
+    constitutionalPosition: { free_speech_1A: 0.58, commerce_clause_scope: 0.60 },
+  },
+  {
+    name: "Balanced Budget Amendment Act", lean: "right", partySupport: "R",
+    issueWeights: { government_spending: 0.95, taxes_spending: 0.8 },
+    issuePositions: { government_spending: 0.92, taxes_spending: 0.82 },
+    affectedIndustries: ["finance"],
+    constitutionalIssues: { federal_vs_state_power: 0.4 },
+    constitutionalPosition: { federal_vs_state_power: 0.70 },
+  },
+  {
+    name: "Puerto Rico Statehood Act", lean: "left", partySupport: "D",
+    issueWeights: { government_spending: 0.5, civil_liberties: 0.6 },
+    issuePositions: { government_spending: 0.25, civil_liberties: 0.18 },
+    affectedIndustries: ["government", "services"],
+    constitutionalIssues: { equal_protection_discrimination: 0.5, federal_vs_state_power: 0.4 },
+    constitutionalPosition: { equal_protection_discrimination: 0.18, federal_vs_state_power: 0.25 },
+  },
+  {
+    name: "AI Deepfake Election Disclosure Act", lean: "center", partySupport: "bipartisan",
+    issueWeights: { tech_regulation: 0.9, civil_liberties: 0.5 },
+    issuePositions: { tech_regulation: 0.30, civil_liberties: 0.35 },
+    affectedIndustries: ["technology", "media"],
+    constitutionalIssues: { free_speech_1A: 0.7, regulatory_authority_admin_state: 0.4 },
+    constitutionalPosition: { free_speech_1A: 0.40, regulatory_authority_admin_state: 0.30 },
+  },
+  {
+    name: "Birthright Citizenship Protection Act", lean: "left", partySupport: "D",
+    issueWeights: { immigration: 0.9, civil_liberties: 0.7 },
+    issuePositions: { immigration: 0.08, civil_liberties: 0.10 },
+    affectedIndustries: ["legal services"],
+    constitutionalIssues: { equal_protection_discrimination: 0.7, immigration_executive_authority: 0.6, individual_rights_vs_government: 0.5 },
+    constitutionalPosition: { equal_protection_discrimination: 0.12, immigration_executive_authority: 0.15, individual_rights_vs_government: 0.18 },
+  },
+  {
+    name: "DACA Dreamer Pathway Act", lean: "left", partySupport: "D",
+    issueWeights: { immigration: 0.95, education: 0.4, civil_liberties: 0.5 },
+    issuePositions: { immigration: 0.10, education: 0.15, civil_liberties: 0.12 },
+    affectedIndustries: ["education", "agriculture", "services"],
+    constitutionalIssues: { immigration_executive_authority: 0.7, executive_power: 0.5, equal_protection_discrimination: 0.3 },
+    constitutionalPosition: { immigration_executive_authority: 0.18, executive_power: 0.25, equal_protection_discrimination: 0.20 },
   },
 ];
 
@@ -242,8 +433,11 @@ function computeVote(member, bill) {
   }
 
   // Noise inversely proportional to ideological rigidity
+  // Also reduce noise when alignment is very strong — strongly-aligned members shouldn't flip on noise alone
   const rigidity = member.behavior?.ideological_rigidity || 0.5;
-  const noise = (1 - rigidity) * (Math.random() - 0.5) * 0.3;
+  const alignmentStrength = totalWeight > 0 ? Math.abs(alignment / totalWeight) : 0;
+  const noiseDampen = alignmentStrength > 0.6 ? 0.3 : alignmentStrength > 0.4 ? 0.6 : 1;
+  const noise = (1 - rigidity) * (Math.random() - 0.5) * 0.3 * noiseDampen;
 
   return (baseProb + noise) > 0.5;
 }
@@ -386,6 +580,20 @@ function getLobbyInfluence(member, bill) {
 
 function getVoteReason(member, bill) {
   if (!bill?.issueWeights) return null;
+  if (member.ch === "exc" && member.r === "President") {
+    if (!member.issues) return null;
+    let maxW = 0, maxIssue = null;
+    for (const [issue, weight] of Object.entries(bill.issueWeights || {})) {
+      if (weight > maxW && member.issues[issue] !== undefined) { maxW = weight; maxIssue = issue; }
+    }
+    if (!maxIssue) return null;
+    const memberPos = member.issues[maxIssue];
+    const billPos = bill.issuePositions?.[maxIssue] ?? 0.5;
+    const aligned = Math.abs(memberPos - billPos) < 0.3;
+    const dir = ISSUE_DIR[maxIssue];
+    if (!dir) return (aligned ? "Supports " : "Opposes ") + maxIssue.replace(/_/g, " ");
+    return (aligned ? "Supports " : "Opposes ") + (memberPos > 0.5 ? dir[1] : dir[0]);
+  }
   if (member.ch === "sct") {
     if (!bill.constitutionalIssues || !member.constitutional_issues) return null;
     let maxW = 0, maxIssue = null;
@@ -409,8 +617,8 @@ function getVoteReason(member, bill) {
 }
 
 // ─── SIMULATION FUNCTIONS ───
-function sim(members, bill) {
-  const r = members.map(m => ({ ...m, v: computeVote(m, bill) }));
+function sim(members, bill, forced) {
+  const r = members.map(m => ({ ...m, v: forced?.[m.id] !== undefined ? forced[m.id] : computeVote(m, bill) }));
   const y = r.filter(x => x.v).length;
   return { r, y, n: r.length - y, ok: y > r.length / 2 };
 }
@@ -424,30 +632,30 @@ function simSCOTUS(members, bill) {
 // ─── VIEWS ───
 const isFullHouse = HOU.length > 100;
 const VIEWS_MOB = {
-  idle: { x: -60, y: -30, w: 1440, h: 860 },
-  hou: isFullHouse ? { x: -30, y: 340, w: 660, h: 360 } : { x: 60, y: 420, w: 460, h: 260 },
+  idle: { x: -60, y: -30, w: 1600, h: 860 },
+  hou: isFullHouse ? { x: -100, y: 80, w: 820, h: 620 } : { x: 60, y: 420, w: 460, h: 260 },
   sen: { x: 20, y: -10, w: 560, h: 300 },
-  exc: { x: 480, y: 80, w: 460, h: 360 },
-  sct: { x: 830, y: 120, w: 440, h: 300 },
-  hou_override: isFullHouse ? { x: -30, y: 340, w: 660, h: 360 } : { x: 60, y: 420, w: 460, h: 260 },
+  exc: { x: 620, y: 80, w: 460, h: 360 },
+  sct: { x: 1030, y: 120, w: 440, h: 300 },
+  hou_override: isFullHouse ? { x: -100, y: 80, w: 820, h: 620 } : { x: 60, y: 420, w: 460, h: 260 },
   sen_override: { x: 20, y: -10, w: 560, h: 300 },
-  done: { x: -60, y: -30, w: 1440, h: 860 },
+  done: { x: -60, y: -30, w: 1600, h: 860 },
 };
 const VIEWS_DT = {
-  idle: { x: -80, y: -50, w: 1540, h: 940 },
-  hou: isFullHouse ? { x: -30, y: 340, w: 660, h: 360 } : { x: 30, y: 400, w: 540, h: 300 },
+  idle: { x: -60, y: -30, w: 1600, h: 800 },
+  hou: isFullHouse ? { x: -100, y: 130, w: 820, h: 620 } : { x: 30, y: 400, w: 540, h: 300 },
   sen: { x: 10, y: -20, w: 580, h: 300 },
-  exc: { x: 460, y: 50, w: 500, h: 430 },
-  sct: { x: 830, y: 100, w: 440, h: 320 },
-  hou_override: isFullHouse ? { x: -30, y: 340, w: 660, h: 360 } : { x: 30, y: 400, w: 540, h: 300 },
+  exc: { x: 620, y: 50, w: 500, h: 430 },
+  sct: { x: 1030, y: 100, w: 440, h: 320 },
+  hou_override: isFullHouse ? { x: -100, y: 120, w: 820, h: 620 } : { x: 30, y: 400, w: 540, h: 300 },
   sen_override: { x: 10, y: -20, w: 580, h: 300 },
-  done: { x: -80, y: -50, w: 1540, h: 940 },
+  done: { x: -60, y: -30, w: 1600, h: 800 },
 };
 
 function lerp(a, b, t) { return a + (b - a) * t; }
 
 // ─── TIMELINE BUILDER ───
-function buildTimeline(policy) {
+function buildTimeline(policy, forcedVotes) {
   const ev = []; let t = 0;
   const shuf = a => [...a].sort(() => Math.random() - 0.5);
   const startChamber = policy.startChamber || (Math.random() < 0.5 ? "hou" : "sen");
@@ -459,21 +667,21 @@ function buildTimeline(policy) {
     : { members: SEN, label: "sen", resultType: "senateResult", stagger: 18, nextLabel: "Presidential Action" };
 
   // First chamber
-  const r1 = sim(first.members, policy);
+  const r1 = sim(first.members, policy, forcedVotes?.[first.label]);
   ev.push({ t, type: "stage", val: first.label }, { t, type: "counter", y: 0, n: 0 }); t += 600;
   const s1 = shuf(r1.r); let y1 = 0, n1 = 0;
   s1.forEach((m, i) => { if (m.v) y1++; else n1++; ev.push({ t: t + i * first.stagger, type: "vote", id: m.id, v: m.v }, { t: t + i * first.stagger, type: "counter", y: y1, n: n1 }); });
   t += s1.length * first.stagger + 400; ev.push({ t, type: first.resultType, ...r1 });
-  if (!r1.ok) { t += 300; ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Defeated", w: first.label === "hou" ? "House" : "Senate" }); return { events: ev, duration: t + 2000, startChamber }; }
+  if (!r1.ok) { t += 300; ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Defeated", w: first.label === "hou" ? "House" : "Senate" }); return { events: ev, duration: t + 2000, startChamber, voteData: { [first.label]: r1 } }; }
   t += 600; ev.push({ t, type: "pause", next: first.nextLabel }); t += 100;
 
   // Second chamber
-  const r2 = sim(second.members, policy);
+  const r2 = sim(second.members, policy, forcedVotes?.[second.label]);
   ev.push({ t, type: "stage", val: second.label }, { t, type: "counter", y: 0, n: 0 }); t += 600;
   const s2 = shuf(r2.r); let y2 = 0, n2 = 0;
   s2.forEach((m, i) => { if (m.v) y2++; else n2++; ev.push({ t: t + i * second.stagger, type: "vote", id: m.id, v: m.v }, { t: t + i * second.stagger, type: "counter", y: y2, n: n2 }); });
   t += s2.length * second.stagger + 400; ev.push({ t, type: second.resultType, ...r2 });
-  if (!r2.ok) { t += 300; ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Defeated", w: second.label === "hou" ? "House" : "Senate" }); return { events: ev, duration: t + 2000, startChamber }; }
+  if (!r2.ok) { t += 300; ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Defeated", w: second.label === "hou" ? "House" : "Senate" }); return { events: ev, duration: t + 2000, startChamber, voteData: { [first.label]: r1, [second.label]: r2 } }; }
   t += 600; ev.push({ t, type: "pause", next: "Presidential Action" }); t += 100;
 
   // President
@@ -706,11 +914,12 @@ export default function GovSim() {
   const win = useWindowSize();
   const mob = mounted && win.w < 768;
   const sm = mounted && win.w < 480;
-  const [timeline, setTimeline] = useState(null);
+  const [restoredPol] = useState(() => { try { const s = sessionStorage.getItem("gs_policy"); return s ? JSON.parse(s) : null; } catch { return null; } });
+  const [timeline, setTimeline] = useState(() => restoredPol ? buildTimeline(restoredPol) : null);
   const [playhead, setPlayhead] = useState(0);
-  const [playing, setPlaying] = useState(false);
+  const [playing, setPlaying] = useState(!!restoredPol);
   const [speed, setSpeed] = useState(1);
-  const [pol, setPol] = useState(null);
+  const [pol, setPol] = useState(restoredPol);
   const [hov, setHov] = useState(null);
   const [mp, setMp] = useState({ x: 0, y: 0 });
   const [vb, setVb] = useState(VIEWS_DT.idle);
@@ -718,6 +927,16 @@ export default function GovSim() {
 
   // Custom bill state
   const [customBill, setCustomBill] = useState("");
+
+  // ─── BATTLE SYSTEM STATE ───
+  const [playerClass, setPlayerClass] = useState(null);
+  const [playerName, setPlayerName] = useState("");
+  const [classOptions, setClassOptions] = useState(() => {
+    const shuffled = [...BATTLE_CLASSES].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 3);
+  });
+  const [battlePhase, setBattlePhase] = useState(null);
+  const battleDone = useRef(false);
 
   // API key state (persisted in localStorage)
   const [apiKey, setApiKey] = useState("");
@@ -802,7 +1021,7 @@ export default function GovSim() {
         const rowCount = Math.min(perRow, HOU.length - row * perRow);
         const a = Math.PI * 0.04 + (inRow / (rowCount - 1 || 1)) * Math.PI * 0.92;
         const r = 70 + row * 14;
-        p[h.id] = { x: Math.cos(a) * r + 300, y: Math.sin(a) * r + 480 };
+        p[h.id] = { x: Math.cos(a) * r + 300, y: Math.sin(a) * r + 380 };
       });
     } else {
       houSorted.forEach((h, idx) => {
@@ -811,8 +1030,8 @@ export default function GovSim() {
         p[h.id] = { x: Math.cos(a) * (95 + row * 24) + 300, y: Math.sin(a) * (95 + row * 24) + 520 };
       });
     }
-    // Executive cluster — center, 25 members
-    const cx = 700, cy = 300;
+    // Executive cluster — right of center, 25 members
+    const cx = 850, cy = 300;
     p[EXC[0].id] = { x: cx, y: cy }; // President
     if (EXC[1]) p[EXC[1].id] = { x: cx, y: cy - 55 }; // VP
     const ring1 = EXC.slice(2, 10); // inner ring — key cabinet
@@ -825,8 +1044,8 @@ export default function GovSim() {
       const a = (idx / ring2.length) * Math.PI * 2 - Math.PI / 2;
       p[e.id] = { x: cx + Math.cos(a) * 130, y: cy + Math.sin(a) * 130 };
     });
-    // SCOTUS — right
-    const bx = 1050, by = 300;
+    // SCOTUS — far right
+    const bx = 1250, by = 300;
     p[SCT[0].id] = { x: bx, y: by - 70 };
     [3, 4, 8, 7, 6, 5, 2, 1].forEach((ji, idx) => {
       if (SCT[ji]) p[SCT[ji].id] = { x: bx - 140 + idx * 40, y: by };
@@ -849,9 +1068,68 @@ export default function GovSim() {
     return so.map(s => ({ label: lb[s.val] || "", start: s.start / timeline.duration, end: s.end / timeline.duration, mid: ((s.start + s.end) / 2) / timeline.duration }));
   }, [timeline]);
 
-  const go = useCallback(policy => { setPol(policy); setTimeline(buildTimeline(policy)); setPlayhead(0); setPlaying(true); setAnalyzing(false); }, []);
-  const reset = () => { setTimeline(null); setPol(null); setPlayhead(0); setPlaying(false); setAnalyzing(false); };
+  const reshuffleClasses = () => { const shuffled = [...BATTLE_CLASSES].sort(() => Math.random() - 0.5); setClassOptions(shuffled.slice(0, 3)); };
+  const go = useCallback(policy => { setPol(policy); setTimeline(buildTimeline(policy)); setPlayhead(0); setPlaying(true); setAnalyzing(false); battleDone.current = false; battledChambers.current = new Set(); setBattlePhase(null); setPlayerClass(null); setPlayerName(""); reshuffleClasses(); try { sessionStorage.setItem("gs_policy", JSON.stringify(policy)); } catch {} }, []);
+  const reset = () => { setTimeline(null); setPol(null); setPlayhead(0); setPlaying(false); setAnalyzing(false); setBattlePhase(null); battleDone.current = false; battledChambers.current = new Set(); setPlayerClass(null); setPlayerName(""); reshuffleClasses(); try { sessionStorage.removeItem("gs_policy"); } catch {} };
   const replay = () => { setPlayhead(0); setPlaying(true); cur.current = VIEWS.idle; };
+
+  // ─── BATTLE PHASE DETECTION ───
+  useEffect(() => {
+    if (snap.out?.s === "Defeated" && !battlePhase && !battleDone.current && timeline?.voteData) {
+      const failedChamber = snap.out.w === "House" ? "hou" : "sen";
+      // Don't offer battle if we already fought in this chamber
+      if (battledChambers.current.has(failedChamber)) return;
+      const failedMembers = failedChamber === "hou" ? HOU : SEN;
+      const voteData = timeline.voteData[failedChamber];
+      if (!voteData) return;
+      const threshold = Math.floor(failedMembers.length / 2) + 1;
+      setPlaying(false);
+      setBattlePhase({ chamber: failedChamber, chamberLabel: snap.out.w, members: failedMembers, voteResults: voteData, yeaCount: voteData.y, nayCount: voteData.n, threshold });
+    }
+  }, [snap.out, battlePhase, timeline]);
+
+  // Track which chambers the player has already battled in
+  const battledChambers = useRef(new Set());
+
+  const handleBattleComplete = useCallback((flippedIds) => {
+    const chamber = battlePhase.chamber;
+    battledChambers.current.add(chamber);
+
+    if (!flippedIds || flippedIds.length === 0) {
+      battleDone.current = true;
+      setBattlePhase(null);
+      return;
+    }
+    // Build forced votes to make the chamber pass
+    const forcedVotes = {};
+    // Preserve first chamber votes
+    for (const ch of Object.keys(timeline.voteData)) {
+      forcedVotes[ch] = {};
+      for (const m of timeline.voteData[ch].r) { forcedVotes[ch][m.id] = m.v; }
+    }
+    // Override flipped members
+    for (const id of flippedIds) { if (forcedVotes[chamber]) forcedVotes[chamber][id] = true; }
+    // Rebuild timeline
+    const newTimeline = buildTimeline(pol, forcedVotes);
+    if (newTimeline.voteData?.[chamber]?.ok) {
+      setTimeline(newTimeline);
+      // Skip past the failed chamber to the pause after it
+      const resultType = chamber === "hou" ? "houseResult" : "senateResult";
+      const resultEvent = newTimeline.events.find(e => e.type === resultType);
+      if (resultEvent) setPlayhead(resultEvent.t + 50);
+      // Don't mark battleDone — the other chamber may still need a battle
+      battleDone.current = false;
+      setPlaying(true);
+    } else {
+      battleDone.current = true;
+    }
+    setBattlePhase(null);
+  }, [battlePhase, timeline, pol]);
+
+  const handleBattleSkip = useCallback(() => {
+    battleDone.current = true;
+    setBattlePhase(null);
+  }, []);
 
   // Custom bill analyzer — Haiku when API key available, keyword fallback otherwise
   const [analyzing, setAnalyzing] = useState(false);
@@ -905,18 +1183,19 @@ export default function GovSim() {
   const isActive = snap.stage !== "idle" && snap.stage !== "done";
 
   return (
-    <div onMouseMove={e => setMp({ x: e.clientX, y: e.clientY })} onClick={e => { if (mob && hov && !e.target.closest("g")) setHov(null); }}
+    <div className="gs-page-enter" onMouseMove={e => setMp({ x: e.clientX, y: e.clientY })} onClick={e => { if (mob && hov && !e.target.closest("g")) setHov(null); }}
       style={{ width: "100%", height: "100dvh", overflow: "hidden", position: "relative", background: C.bg, fontFamily: SERIF, color: C.text, touchAction: "manipulation" }}>
       {/* Animations and hover styles are in globals.css */}
       {/* Texture */}
       <div style={{ position: "absolute", inset: 0, opacity: .02, pointerEvents: "none", backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`, backgroundSize: "256px" }} />
 
-      {/* SVG */}
-      <svg viewBox={vbStr} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} preserveAspectRatio="xMidYMid meet">
+      {/* SVG — only render after mount to avoid hydration mismatch from float precision */}
+      <svg viewBox={vbStr} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} preserveAspectRatio="xMidYMid meet" suppressHydrationWarning>
+        {mounted && <>
         <text x="300" y="16" textAnchor="middle" style={{ fontSize: 14, fill: C.textMid, letterSpacing: 4, fontFamily: SANS, fontWeight: 700 }}>UNITED STATES SENATE</text>
-        <text x="300" y="470" textAnchor="middle" style={{ fontSize: 14, fill: C.textMid, letterSpacing: 4, fontFamily: SANS, fontWeight: 700 }}>HOUSE OF REPRESENTATIVES</text>
-        <text x="700" y="135" textAnchor="middle" style={{ fontSize: 14, fill: C.textMid, letterSpacing: 4, fontFamily: SANS, fontWeight: 700 }}>EXECUTIVE</text>
-        <text x="1050" y="190" textAnchor="middle" style={{ fontSize: 14, fill: C.textMid, letterSpacing: 4, fontFamily: SANS, fontWeight: 700 }}>SUPREME COURT</text>
+        <text x="300" y="370" textAnchor="middle" style={{ fontSize: 14, fill: C.textMid, letterSpacing: 4, fontFamily: SANS, fontWeight: 700 }}>HOUSE OF REPRESENTATIVES</text>
+        <text x="850" y="135" textAnchor="middle" style={{ fontSize: 14, fill: C.textMid, letterSpacing: 4, fontFamily: SANS, fontWeight: 700 }}>EXECUTIVE</text>
+        <text x="1250" y="190" textAnchor="middle" style={{ fontSize: 14, fill: C.textMid, letterSpacing: 4, fontFamily: SANS, fontWeight: 700 }}>SUPREME COURT</text>
 
         {all.map((m, idx) => {
           const p = positions[m.id]; if (!p) return null;
@@ -942,6 +1221,7 @@ export default function GovSim() {
         {SCT.map(j => { const p = positions[j.id]; return p && <text key={j.id + "l"} x={p.x} y={p.y + nr(j) + 16} textAnchor="middle" style={{ fontSize: 8, fill: C.textMid, fontFamily: SANS, fontWeight: 600, pointerEvents: "none" }}>{j.r === "Chief Justice" ? "CJ Roberts" : j.n.split(" ").pop()}</text>; })}
         {/* President + VP labels */}
         {EXC.slice(0, 2).map(m => { const p = positions[m.id]; return p && <text key={m.id + "l"} x={p.x} y={p.y + nr(m) + 14} textAnchor="middle" style={{ fontSize: 10, fill: C.text, fontFamily: SANS, fontWeight: 700, pointerEvents: "none" }}>{m.n.split(" ").pop()}</text>; })}
+        </>}
       </svg>
 
       {/* ─── Top bar ─── */}
@@ -1018,8 +1298,8 @@ export default function GovSim() {
           </Card>
         </div>}
 
-      {/* ─── Outcome ─── */}
-      {snap.out && (() => {
+      {/* ─── Outcome (hidden during battle phase, show for non-defeat outcomes or after battle is done) ─── */}
+      {snap.out && !battlePhase && (snap.out.s !== "Defeated" || battleDone.current) && (() => {
         const won = snap.out.s === "Enacted";
         const label = { Enacted: "Law Enacted", Defeated: `Defeated in the ${snap.out.w}`, Vetoed: "Veto Sustained", Unconstitutional: "Ruled Unconstitutional" }[snap.out.s];
         const accent = won ? C.yea : C.nay;
@@ -1028,8 +1308,8 @@ export default function GovSim() {
             <CardTitle style={{ marginBottom: 6, fontSize: mob ? 10 : 11 }}>Final Result</CardTitle>
             <CardContent style={{ fontSize: mob ? 22 : 34, fontWeight: 600, fontFamily: SANS, color: accent, lineHeight: 1.1 }}>{label}</CardContent>
             <div style={{ marginTop: mob ? 8 : 10, display: "flex", gap: 8, justifyContent: "center" }}>
-              <Button variant="ghost" size={mob ? "sm" : "md"} onClick={() => { reset(); }} style={{ padding: mob ? "7px 16px" : "8px 20px", fontSize: mob ? 11 : 12, fontWeight: 500, letterSpacing: 0 }}>Try a new bill</Button>
-              <Button variant="ghost" size={mob ? "sm" : "md"} onClick={() => { setPlayhead(0); setPlaying(true); }} style={{ padding: mob ? "7px 16px" : "8px 20px", fontSize: mob ? 11 : 12, fontWeight: 500, letterSpacing: 0 }}>Replay</Button>
+              <Button variant="ghost" size={mob ? "sm" : "md"} onClick={() => { reset(); }} style={{ padding: mob ? "7px 16px" : "8px 20px", fontSize: mob ? 11 : 12, fontWeight: 600, letterSpacing: 0, border: "none", boxShadow: "0 1px 4px rgba(44,36,24,0.08)" }}>Try a new bill</Button>
+              <Button variant="ghost" size={mob ? "sm" : "md"} onClick={() => { setPlayhead(0); setPlaying(true); }} style={{ padding: mob ? "7px 16px" : "8px 20px", fontSize: mob ? 11 : 12, fontWeight: 600, letterSpacing: 0, border: "none", boxShadow: "0 1px 4px rgba(44,36,24,0.08)" }}>Replay</Button>
             </div>
           </Card>
         </div>;
@@ -1124,7 +1404,7 @@ export default function GovSim() {
           </div>
 
           {/* Preset policies */}
-          <Card className="shadow-[var(--shadow-sm),var(--shadow-lg)] overflow-hidden !p-0">
+          <Card className="shadow-[var(--shadow-sm),var(--shadow-lg)] overflow-hidden !p-0" style={{ maxHeight: mob ? "40vh" : "50vh", overflowY: "auto" }}>
             {POLS.map((p, idx) => (
               <div key={idx} className="gs-preset-item gs-interactive" onClick={() => go(p)}
                 style={{ padding: mob ? "10px 16px" : "11px 20px", cursor: "pointer", borderBottom: idx < POLS.length - 1 ? `1px solid ${C.borderLight}` : "none", display: "flex", alignItems: "center", gap: mob ? 8 : 11 }}>
@@ -1211,6 +1491,33 @@ export default function GovSim() {
           </div>
         </div>
       </div>}
+
+      {/* ─── BATTLE SYSTEM OVERLAY ─── */}
+      {battlePhase && (
+        <BattleSystem
+          policy={pol}
+          chamber={battlePhase.chamber}
+          chamberLabel={battlePhase.chamberLabel}
+          members={battlePhase.members}
+          voteResults={battlePhase.voteResults}
+          yeaCount={battlePhase.yeaCount}
+          nayCount={battlePhase.nayCount}
+          threshold={battlePhase.threshold}
+          playerClass={playerClass}
+          setPlayerClass={setPlayerClass}
+          playerName={playerName}
+          setPlayerName={setPlayerName}
+          classOptions={classOptions}
+          onComplete={handleBattleComplete}
+          onSkip={handleBattleSkip}
+          colors={C}
+          fonts={{ sans: SANS, serif: SERIF }}
+          radii={R}
+          shadows={S}
+          mob={mob}
+          sm={sm}
+        />
+      )}
     </div>
   );
 }
