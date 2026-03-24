@@ -7,7 +7,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "oxlint src/ app/ && eslint ."
+    "lint": "oxlint src/ app/ && eslint .",
+    "format": "oxfmt --write src/ app/",
+    "format:check": "oxfmt --check src/ app/"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
@@ -25,7 +27,8 @@
     "react-dom": "^19.2.0",
     "react-grab": "^0.1.26",
     "tailwind-merge": "^3.5.0",
-    "tailwindcss": "^4.2.1"
+    "tailwindcss": "^4.2.1",
+    "tone": "^15.1.22"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -33,6 +36,7 @@
     "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "oxfmt": "^0.41.0",
     "oxlint": "^1.51.0"
   }
 }

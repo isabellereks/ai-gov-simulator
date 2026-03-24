@@ -4,7 +4,8 @@ import { Button } from "@/src/components/ui/button";
 import { Card, CardTitle, CardContent } from "@/src/components/ui/card";
 import { Input } from "@/src/components/ui/input";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from "@/src/components/ui/dialog";
-import BattleSystem, { BATTLE_CLASSES } from "./BattleSim";
+import { BATTLE_CLASSES, WELL_KNOWN } from "./BattleSim";
+import PokeMacBattle from "@/src/components/battle/PokeMacBattle";
 
 // ─── DESIGN TOKENS ───
 const C = {
@@ -27,12 +28,7 @@ const S = {
 };
 
 // ─── NOTABLE MEMBERS (shimmer highlight) ───
-const NOTABLE = new Set([
-  "Ted Cruz", "Bernie Sanders", "Hakeem Jeffries",
-  "Mike Johnson", "Chuck Schumer", "Alexandria Ocasio-Cortez",
-  "John Thune", "Susan Collins", "Lindsey Graham",
-  "Mitch McConnell", "Elizabeth Warren",
-]);
+const NOTABLE = WELL_KNOWN;
 
 // ─── ISSUE LABELS ───
 // Each issue has [leftLabel, rightLabel] — 0.0=left position, 1.0=right position
@@ -1100,20 +1096,50 @@ export default function GovSim() {
       setBattlePhase(null);
       return;
     }
+
     // Build forced votes to make the chamber pass
     const forcedVotes = {};
-    // Preserve first chamber votes
+    // Preserve existing chamber votes
     for (const ch of Object.keys(timeline.voteData)) {
       forcedVotes[ch] = {};
       for (const m of timeline.voteData[ch].r) { forcedVotes[ch][m.id] = m.v; }
     }
-    // Override flipped members
-    for (const id of flippedIds) { if (forcedVotes[chamber]) forcedVotes[chamber][id] = true; }
-    // Rebuild timeline
+    // Override flipped members (skip VP_VANCE — not a real senator)
+    const hasVP = chamber === "sen" && flippedIds.includes("vp_vance");
+    for (const id of flippedIds) {
+      if (id === "vp_vance") continue;
+      if (forcedVotes[chamber]) forcedVotes[chamber][id] = true;
+    }
+    // Safety net: if battle was won, guarantee the chamber passes.
+    // Force additional nay voters to yea if needed (handles VP tiebreak
+    // and any counting mismatch between battle UI and sim).
+    if (forcedVotes[chamber]) {
+      const members = chamber === "sen" ? SEN : HOU;
+      const needed = Math.floor(members.length / 2) + 1;
+      let yeaCount = 0;
+      for (const m of members) {
+        if (forcedVotes[chamber][m.id] === true) yeaCount++;
+      }
+      if (yeaCount < needed) {
+        const voteData = timeline.voteData[chamber];
+        if (voteData) {
+          const nays = voteData.r.filter(m => !forcedVotes[chamber][m.id]);
+          for (const m of nays) {
+            if (yeaCount >= needed) break;
+            forcedVotes[chamber][m.id] = true;
+            yeaCount++;
+          }
+        }
+      }
+    }
+    // Rebuild timeline — preserve chamber order so the battled chamber isn't skipped
+    const savedStart = pol.startChamber;
+    pol.startChamber = timeline.startChamber;
     const newTimeline = buildTimeline(pol, forcedVotes);
+    pol.startChamber = savedStart;
     if (newTimeline.voteData?.[chamber]?.ok) {
       setTimeline(newTimeline);
-      // Skip past the failed chamber to the pause after it
+      // Skip past the battled chamber to the pause after it
       const resultType = chamber === "hou" ? "houseResult" : "senateResult";
       const resultEvent = newTimeline.events.find(e => e.type === resultType);
       if (resultEvent) setPlayhead(resultEvent.t + 50);
@@ -1494,7 +1520,7 @@ export default function GovSim() {
 
       {/* ─── BATTLE SYSTEM OVERLAY ─── */}
       {battlePhase && (
-        <BattleSystem
+        <PokeMacBattle
           policy={pol}
           chamber={battlePhase.chamber}
           chamberLabel={battlePhase.chamberLabel}
@@ -1513,9 +1539,7 @@ export default function GovSim() {
           colors={C}
           fonts={{ sans: SANS, serif: SERIF }}
           radii={R}
-          shadows={S}
           mob={mob}
-          sm={sm}
         />
       )}
     </div>

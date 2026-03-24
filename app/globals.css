@@ -351,3 +351,1385 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   POKEMAC BATTLE SHELL
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── POKEMAC THEME TOKENS ─── */
+:root {
+  --pm-page-bg: #3d3428;
+  --pm-shell-bg: #f5f0e8;
+  --pm-titlebar: #e8e2d8;
+  --pm-border: #ddd6c8;
+  --pm-border-dark: #c5bca9;
+  --pm-panel-bg: #faf7f2;
+  --pm-panel-alt: #f0ebe1;
+  --pm-hover: #ebe5d9;
+  --pm-text: #1a1510;
+  --pm-text-mid: #6b604e;
+  --pm-text-mute: #a89e8c;
+  --pm-viewport-bg: #e8e2d8;
+  --pm-dialogue-bg: #f5f0e8;
+  --pm-sidebar-bg: #faf7f2;
+  --pm-nameplate-bg: #f5f0e8;
+  --pm-hp-track-bg: #ddd6c8;
+}
+
+/* ─── PAGE BACKGROUND ─── */
+.pokemac-page {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(245, 240, 232, 0.55);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* ─── WINDOW SHELL ─── */
+.pokemac-shell {
+  width: 100%;
+  max-width: 960px;
+  max-height: 100%;
+  aspect-ratio: 4 / 3;
+  background: var(--pm-shell-bg);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.08),
+    0 24px 80px rgba(44,36,24,0.25),
+    0 8px 32px rgba(44,36,24,0.15);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── TITLE BAR ─── */
+.pokemac-titlebar {
+  height: 38px;
+  background: var(--pm-titlebar);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--pm-border-dark);
+  -webkit-app-region: drag;
+}
+
+.pokemac-dots {
+  display: flex;
+  gap: 7px;
+}
+
+.pokemac-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--pm-text-mid);
+}
+
+.pokemac-dot--close { background: #ff5f57; }
+.pokemac-dot--minimize { background: #febc2e; }
+.pokemac-dot--maximize { background: #28c840; }
+
+.pokemac-title {
+  font-family: var(--font-pixel), monospace;
+  font-size: 9px;
+  color: var(--pm-text-mute);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* ─── CONTENT LAYOUT ─── */
+.pokemac-content {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BATTLE VIEWPORT (left, 4:3)
+   ═══════════════════════════════════════════════════════════ */
+
+.pokemac-viewport {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--pm-viewport-bg);
+  position: relative;
+  /* maintain approximate 4:3 within available space */
+}
+
+.pokemac-scene {
+  flex: 1;
+  position: relative;
+  background:
+    linear-gradient(180deg, #3a5a3a 0%, #4a7a4a 40%, #5a8a5a 40.5%, #4a7040 60%, #3d5a2e 100%);
+  overflow: hidden;
+}
+
+/* ─── GROUND ELLIPSES ─── */
+.pokemac-ground {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.15);
+}
+
+.pokemac-ground--enemy {
+  width: 140px;
+  height: 24px;
+  top: 42%;
+  right: 12%;
+}
+
+.pokemac-ground--player {
+  width: 160px;
+  height: 28px;
+  bottom: 14%;
+  left: 10%;
+}
+
+/* ─── SPRITE AREAS ─── */
+.pokemac-enemy-area {
+  position: absolute;
+  top: 8%;
+  right: 4%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.pokemac-player-area {
+  position: absolute;
+  bottom: 8%;
+  left: 4%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* ─── PLACEHOLDER SPRITES ─── */
+.pokemac-sprite-placeholder {
+  width: 72px;
+  height: 80px;
+  image-rendering: pixelated;
+}
+
+.pokemac-sprite-placeholder--rep {
+  background: #c1432e;
+}
+
+.pokemac-sprite-placeholder--dem {
+  background: #2e5e8c;
+}
+
+.pokemac-sprite-placeholder--player {
+  background: #6b5b95;
+  width: 64px;
+  height: 72px;
+}
+
+.pokemac-sprite {
+  animation: pokemac-idle-bob 1s steps(2) infinite;
+}
+
+@keyframes pokemac-idle-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+/* ─── NAMEPLATES ─── */
+.pokemac-nameplate {
+  background: var(--pm-nameplate-bg);
+  border: 2px solid var(--pm-border-dark);
+  padding: 6px 12px;
+  min-width: 240px;
+}
+
+.pokemac-nameplate--enemy {
+  border-radius: 0 0 0 8px;
+}
+
+.pokemac-nameplate--player {
+  border-radius: 0 8px 0 0;
+}
+
+.pokemac-nameplate-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 2px;
+}
+
+.pokemac-nameplate-name {
+  font-family: var(--font-pixel), monospace;
+  font-size: 10px;
+  color: var(--pm-text);
+  letter-spacing: 0.5px;
+}
+
+.pokemac-nameplate-level {
+  font-family: var(--font-pixel), monospace;
+  font-size: 8px;
+  color: var(--pm-text-mute);
+}
+
+.pokemac-nameplate-sub {
+  font-family: var(--font-pixel), monospace;
+  font-size: 7px;
+  color: var(--pm-text-mid);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+/* ─── HP BAR ─── */
+.pokemac-hp-track {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pokemac-hp-label {
+  font-family: var(--font-pixel), monospace;
+  font-size: 7px;
+  color: #d4a017;
+  font-weight: bold;
+}
+
+.pokemac-hp-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--pm-hp-track-bg);
+  border: 1px solid var(--pm-border-dark);
+  border-radius: 1px;
+  overflow: hidden;
+  display: flex;
+  gap: 1px;
+}
+
+.pokemac-hp-fill {
+  height: 100%;
+  background: #4a8;
+  transition: width 0.6s ease;
+}
+
+.pokemac-hp-fill--player {
+  background: #4a8;
+}
+
+.pokemac-hp-segment {
+  flex: 1;
+  height: 100%;
+  transition: background 0.15s ease;
+}
+
+.pokemac-hp-numbers {
+  font-family: var(--font-pixel), monospace;
+  font-size: 8px;
+  color: var(--pm-text-mute);
+  text-align: right;
+  margin-top: 2px;
+}
+
+/* ─── DIALOGUE BOX ─── */
+.pokemac-dialogue {
+  height: 80px;
+  background: var(--pm-dialogue-bg);
+  border-top: 3px solid var(--pm-border-dark);
+  padding: 14px 20px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.pokemac-dialogue-text {
+  font-family: var(--font-pixel), monospace;
+  font-size: 11px;
+  color: var(--pm-text);
+  line-height: 1.8;
+  letter-spacing: 0.5px;
+}
+
+.pokemac-dialogue-cursor {
+  display: inline-block;
+  margin-left: 4px;
+  animation: blink 1s steps(2) infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BATTLE SIDEBAR (right, ~300px)
+   ═══════════════════════════════════════════════════════════ */
+
+.pokemac-sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  background: var(--pm-sidebar-bg);
+  border-left: 1px solid var(--pm-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+}
+
+/* ─── PANELS ─── */
+.pokemac-panel {
+  border-bottom: 1px solid var(--pm-border);
+}
+
+.pokemac-panel--grow {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pokemac-panel-header {
+  font-family: var(--font-pixel), monospace;
+  font-size: 8px;
+  color: var(--pm-text-mid);
+  letter-spacing: 2px;
+  padding: 10px 14px 6px;
+  text-transform: uppercase;
+}
+
+.pokemac-panel-body {
+  padding: 4px 14px 12px;
+}
+
+/* ─── TRAINER PANEL ─── */
+.pokemac-trainer-name {
+  font-family: var(--font-family-sans);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--pm-text);
+  margin-bottom: 2px;
+}
+
+.pokemac-trainer-class {
+  font-family: var(--font-family-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pm-text-mute);
+  margin-bottom: 6px;
+}
+
+.pokemac-trainer-detail {
+  font-family: var(--font-family-serif);
+  font-size: 12px;
+  color: var(--pm-text-mid);
+  line-height: 1.4;
+}
+
+/* ─── BILL PANEL ─── */
+.pokemac-bill-name {
+  font-family: var(--font-family-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pm-text);
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+
+.pokemac-bill-status {
+  font-family: var(--font-pixel), monospace;
+  font-size: 9px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pokemac-bill-yea { color: #4a8; }
+.pokemac-bill-nay { color: #c44; }
+.pokemac-bill-sep { color: var(--pm-border); }
+.pokemac-bill-needed { color: var(--pm-text-mute); }
+
+/* ─── BATTLE LOG ─── */
+.pokemac-log-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  max-height: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pokemac-log-entry {
+  font-family: var(--font-family-sans);
+  font-size: 11px;
+  color: var(--pm-text-mute);
+  line-height: 1.4;
+  padding: 2px 0;
+}
+
+.pokemac-log-entry--effective {
+  color: #d4a017;
+  font-weight: 600;
+}
+
+.pokemac-log-entry--weak {
+  color: var(--pm-text-mid);
+  font-style: italic;
+}
+
+.pokemac-log-entry--enemy {
+  color: #c1432e;
+}
+
+/* ─── SENATOR INTEL ─── */
+.pokemac-intel-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--pm-border);
+}
+
+.pokemac-intel-row:last-child {
+  border-bottom: none;
+}
+
+.pokemac-intel-label {
+  font-family: var(--font-family-sans);
+  font-size: 11px;
+  color: var(--pm-text-mid);
+}
+
+.pokemac-intel-value {
+  font-family: var(--font-family-sans);
+  font-size: 11px;
+  color: var(--pm-text);
+  font-weight: 600;
+  text-align: right;
+  word-break: break-word;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   POKEMAC MOBILE (stack vertical)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── MOVE GRID (overlays dialogue area) ─── */
+.pokemac-move-grid {
+  height: 80px;
+  background: var(--pm-nameplate-bg);
+  border-top: 3px solid var(--pm-border-dark);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 0;
+}
+
+.pokemac-move-btn {
+  background: var(--pm-nameplate-bg);
+  border: 1px solid var(--pm-border);
+  padding: 4px 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.pokemac-move-btn:hover {
+  background: var(--pm-hover);
+}
+
+.pokemac-move-btn:active {
+  background: var(--pm-hover);
+}
+
+.pokemac-move-name {
+  font-family: var(--font-pixel), monospace;
+  font-size: 8px;
+  color: var(--pm-text);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.pokemac-move-rare {
+  font-size: 6px;
+  color: #d4a017;
+  border: 1px solid #d4a017;
+  padding: 0 2px;
+}
+
+.pokemac-move-meta {
+  font-family: var(--font-family-sans);
+  font-size: 9px;
+  color: var(--pm-text-mid);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.pokemac-move-cat {
+  text-transform: uppercase;
+  font-weight: 600;
+  font-size: 8px;
+}
+
+.pokemac-move-pwr {
+  color: var(--pm-text-mute);
+}
+
+.pokemac-move-eff {
+  font-weight: 700;
+  font-size: 8px;
+}
+
+/* ─── END BATTLE BUTTON ─── */
+.pokemac-end-btn {
+  width: 100%;
+  padding: 10px;
+  background: var(--pm-nameplate-bg);
+  border: 1px solid var(--pm-border-dark);
+  color: var(--pm-text);
+  font-family: var(--font-pixel), monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.pokemac-end-btn:hover {
+  background: var(--pm-hover);
+}
+
+/* ─── EFFECTIVENESS POPUP ─── */
+.pokemac-effectiveness {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 100;
+  pointer-events: none;
+  white-space: nowrap;
+  font-family: var(--font-pixel), monospace;
+  font-size: 12px;
+  font-weight: bold;
+  text-shadow: 0 0 12px currentColor;
+  animation: pokemac-eff-pop 1.5s ease-out forwards;
+}
+
+@keyframes pokemac-eff-pop {
+  0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+  15% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; }
+  30% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  80% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+
+/* ─── SPRITE HIT FLASH ─── */
+.pokemac-sprite--hit {
+  animation: pokemac-hit-flash 0.4s steps(4) !important;
+}
+
+@keyframes pokemac-hit-flash {
+  0% { opacity: 1; filter: brightness(1); }
+  25% { opacity: 0.3; filter: brightness(2); }
+  50% { opacity: 1; filter: brightness(1); }
+  75% { opacity: 0.3; filter: brightness(2); }
+  100% { opacity: 1; filter: brightness(1); }
+}
+
+/* ─── SPRITE FAINT ─── */
+.pokemac-sprite--faint {
+  animation: pokemac-faint 0.8s ease-in forwards !important;
+}
+
+@keyframes pokemac-faint {
+  0% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(40px); opacity: 0; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CLASS SELECTION (inside window shell)
+   ═══════════════════════════════════════════════════════════ */
+
+.pokemac-class-select {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow-y: auto;
+  background: var(--pm-viewport-bg);
+}
+
+.pokemac-class-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.pokemac-class-title {
+  font-family: var(--font-pixel), monospace;
+  font-size: 14px;
+  color: var(--pm-text);
+  letter-spacing: 2px;
+  margin-bottom: 6px;
+}
+
+.pokemac-class-subtitle {
+  font-family: var(--font-family-sans);
+  font-size: 13px;
+  color: var(--pm-text-mid);
+}
+
+.pokemac-name-input-wrap {
+  margin-bottom: 20px;
+  width: 100%;
+  max-width: 280px;
+  text-align: center;
+}
+
+.pokemac-name-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--pm-panel-bg);
+  border: 2px solid var(--pm-border-dark);
+  color: var(--pm-text);
+  font-family: var(--font-pixel), monospace;
+  font-size: 10px;
+  outline: none;
+  text-align: center;
+}
+
+.pokemac-name-input:focus {
+  border-color: var(--pm-text-mute);
+}
+
+.pokemac-name-input::placeholder {
+  color: var(--pm-border-dark);
+}
+
+/* Card grid */
+.pokemac-class-cards {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 20px;
+  perspective: 800px;
+}
+
+/* Flip container */
+.pokemac-flip-container {
+  width: 200px;
+  height: 250px;
+  perspective: 600px;
+  cursor: pointer;
+}
+
+.pokemac-flip-inner {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.5s ease;
+  transform-style: preserve-3d;
+}
+
+.pokemac-flip-inner--flipped {
+  transform: rotateY(180deg);
+}
+
+.pokemac-flip-face {
+  grid-area: 1 / 1;
+  height: 100%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 14px;
+  border: 1.5px solid var(--pm-border);
+  background: var(--pm-nameplate-bg);
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.pokemac-flip-container:hover .pokemac-flip-face {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.06);
+  border-color: var(--pm-text-mute);
+}
+
+/* Front — class info (visible by default) */
+.pokemac-flip-front-default {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Back — moves (hidden, shown on flip) */
+.pokemac-flip-back-moves {
+  transform: rotateY(180deg);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Colored accent bar at top of card */
+.pokemac-flip-face::before {
+  content: "";
+  display: block;
+  height: 4px;
+  background: var(--shimmer-color, var(--pm-text-mute));
+  width: 100%;
+  flex-shrink: 0;
+}
+
+/* Content padding inside card faces */
+.pokemac-flip-front-default,
+.pokemac-flip-back-moves {
+  gap: 4px;
+  cursor: pointer;
+}
+
+.pokemac-flip-front-default > *:not(.pokemac-class-pick-btn),
+.pokemac-flip-back-moves > *:not(.pokemac-class-pick-btn) {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.pokemac-flip-front-default > :first-child {
+  padding-top: 16px;
+}
+
+.pokemac-flip-back-moves > :first-child {
+  padding-top: 16px;
+}
+
+.pokemac-flip-front-default > :last-child {
+  padding-bottom: 10px;
+}
+
+.pokemac-flip-back-moves > :last-child {
+  padding-bottom: 10px;
+}
+
+/* Selected shimmer */
+.pokemac-class-card--selected .pokemac-flip-face {
+  border-color: var(--shimmer-color, #a89e8c);
+  box-shadow: 0 0 14px var(--shimmer-glow, rgba(168,158,140,0.25)), 0 4px 12px rgba(0,0,0,0.08);
+}
+
+
+.pokemac-class-card-sprite {
+  margin-bottom: 4px;
+}
+
+.pokemac-class-card-name {
+  font-family: var(--font-pixel), monospace;
+  font-size: 9px;
+  color: var(--pm-text);
+  text-align: center;
+}
+
+.pokemac-class-card-desc {
+  font-family: var(--font-family-sans);
+  font-size: 10px;
+  color: var(--pm-text-mid);
+  line-height: 1.4;
+  text-align: left;
+  width: 100%;
+  margin-top: 6px;
+}
+
+/* Moves list on front */
+.pokemac-class-moves {
+  width: 100%;
+  margin-top: 4px;
+  text-align: center;
+}
+
+.pokemac-class-moves-label {
+  font-family: var(--font-pixel), monospace;
+  font-size: 7px;
+  color: var(--pm-text-mute);
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.pokemac-class-moves-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  justify-content: center;
+}
+
+.pokemac-class-move {
+  font-family: var(--font-family-sans);
+  font-size: 8px;
+  padding: 2px 5px;
+  border: 1px solid var(--pm-border);
+  border-radius: 4px;
+  border-left-width: 3px;
+  color: var(--pm-text-mid);
+  white-space: nowrap;
+}
+
+.pokemac-class-move--random {
+  border-left-width: 1px;
+  border-style: dashed;
+  color: var(--pm-text-mute);
+  font-style: italic;
+}
+
+.pokemac-class-card-types {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.pokemac-class-type-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.pokemac-class-type-label {
+  font-family: var(--font-family-sans);
+  font-size: 8px;
+  color: var(--pm-text-mute);
+}
+
+.pokemac-class-type-tag {
+  font-family: var(--font-family-sans);
+  font-size: 8px;
+  padding: 2px 5px;
+  border: 1px solid var(--pm-border);
+  border-radius: 4px;
+  border-left-width: 3px;
+  color: var(--pm-text-mid);
+  white-space: nowrap;
+}
+
+.pokemac-class-type-tag--strong {
+  border-color: #4a8;
+}
+
+.pokemac-class-type-tag--weak {
+  border-color: #c44;
+}
+
+.pokemac-class-pick-btn {
+  margin-top: auto;
+  padding: 2px 8px 14px;
+  background: transparent;
+  border: none;
+  color: var(--pm-text-mute);
+  font-family: var(--font-pixel), monospace;
+  font-size: 6px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: all 0.15s ease;
+}
+
+.pokemac-class-pick-btn:hover {
+  color: var(--pm-text);
+}
+
+.pokemac-class-pick-btn--active {
+  color: var(--shimmer-color, var(--pm-text));
+  text-decoration: none;
+  font-weight: bold;
+}
+
+/* Confirm bar */
+.pokemac-class-confirm {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--pm-nameplate-bg);
+  border: 2px solid var(--pm-border-dark);
+  border-radius: 12px;
+  animation: pokemac-confirm-in 0.25s ease-out;
+}
+
+@keyframes pokemac-confirm-in {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.pokemac-class-confirm-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.pokemac-class-confirm-name {
+  font-family: var(--font-pixel), monospace;
+  font-size: 10px;
+  color: var(--pm-text);
+  margin-bottom: 4px;
+}
+
+.pokemac-class-confirm-intro {
+  font-family: var(--font-family-sans);
+  font-size: 11px;
+  color: var(--pm-text-mid);
+  line-height: 1.3;
+}
+
+.pokemac-class-go-btn {
+  padding: 12px 24px;
+  background: var(--pm-text);
+  border: none;
+  border-radius: 8px;
+  color: var(--pm-panel-bg);
+  font-family: var(--font-pixel), monospace;
+  font-size: 12px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.pokemac-class-go-btn:hover {
+  background: #d4a017;
+  color: var(--pm-text);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TARGET SELECTION
+   ═══════════════════════════════════════════════════════════ */
+
+.pokemac-target-select {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px;
+  overflow-y: auto;
+  background: var(--pm-viewport-bg);
+}
+
+.pokemac-target-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.pokemac-target-title {
+  font-family: var(--font-pixel), monospace;
+  font-size: 12px;
+  color: var(--pm-text);
+  letter-spacing: 2px;
+  margin-bottom: 6px;
+}
+
+.pokemac-target-subtitle {
+  font-family: var(--font-family-sans);
+  font-size: 12px;
+  color: var(--pm-text-mid);
+}
+
+.pokemac-target-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 20px;
+  max-width: 700px;
+}
+
+.pokemac-target-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--pm-nameplate-bg);
+  border: 2px solid var(--pm-border);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+  width: 220px;
+}
+
+.pokemac-target-card:hover,
+.pokemac-target-card--hover {
+  border-color: var(--pm-text-mid);
+  background: var(--pm-hover);
+  transform: translateY(-2px);
+}
+
+.pokemac-target-card-sprite {
+  flex-shrink: 0;
+}
+
+.pokemac-target-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pokemac-target-card-name {
+  font-family: var(--font-pixel), monospace;
+  font-size: 8px;
+  color: var(--pm-text);
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pokemac-target-card-arch {
+  font-family: var(--font-pixel), monospace;
+  font-size: 7px;
+  color: var(--pm-text-mid);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.pokemac-target-card-meta {
+  font-family: var(--font-family-sans);
+  font-size: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pokemac-target-card-party {
+  font-weight: 700;
+}
+
+.pokemac-target-card-count {
+  color: var(--pm-text-mid);
+}
+
+.pokemac-target-card-difficulty {
+  font-family: var(--font-pixel), monospace;
+  font-size: 7px;
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+
+.pokemac-give-up-btn {
+  padding: 8px 20px;
+  background: transparent;
+  border: 1px solid var(--pm-border);
+  color: var(--pm-border-dark);
+  font-family: var(--font-pixel), monospace;
+  font-size: 8px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pokemac-give-up-btn:hover {
+  border-color: #c44;
+  color: #c44;
+
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ENCOUNTER TRANSITION
+   ═══════════════════════════════════════════════════════════ */
+
+.pokemac-encounter-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  pointer-events: none;
+}
+
+.pokemac-encounter-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  background: var(--pm-text);
+  transition: height 0.4s cubic-bezier(0.7, 0, 0.3, 1);
+}
+
+.pokemac-encounter-bar--top {
+  top: 0;
+}
+
+.pokemac-encounter-bar--bottom {
+  bottom: 0;
+}
+
+.pokemac-encounter-transition[data-phase="enter"] .pokemac-encounter-bar,
+.pokemac-encounter-transition[data-phase="hold"] .pokemac-encounter-bar {
+  height: 50%;
+}
+
+.pokemac-encounter-transition[data-phase="exit"] .pokemac-encounter-bar {
+  height: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TRIGGER OVERLAY
+   ═══════════════════════════════════════════════════════════ */
+
+.pokemac-trigger-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(26, 21, 16, 0.6);
+  backdrop-filter: blur(4px);
+  animation: fade-in 0.3s ease-out;
+}
+
+.pokemac-trigger-card {
+  background: var(--pm-nameplate-bg);
+  border: 2px solid var(--pm-border-dark);
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+}
+
+.pokemac-trigger-header {
+  font-family: var(--font-pixel), monospace;
+  font-size: 14px;
+  color: #c44;
+  letter-spacing: 2px;
+  margin-bottom: 16px;
+}
+
+.pokemac-trigger-body {
+  margin-bottom: 20px;
+}
+
+.pokemac-trigger-counts {
+  font-family: var(--font-pixel), monospace;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.pokemac-trigger-text {
+  font-family: var(--font-family-sans);
+  font-size: 13px;
+  color: var(--pm-text-mute);
+  line-height: 1.5;
+}
+
+.pokemac-trigger-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.pokemac-trigger-fight {
+  padding: 10px 28px;
+  background: var(--pm-text);
+  border: none;
+  color: var(--pm-panel-bg);
+  font-family: var(--font-pixel), monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pokemac-trigger-fight:hover {
+  background: #d4a017;
+}
+
+.pokemac-trigger-skip {
+  padding: 10px 28px;
+  background: transparent;
+  border: 1px solid var(--pm-border);
+  color: var(--pm-text-mid);
+  font-family: var(--font-pixel), monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pokemac-trigger-skip:hover {
+  border-color: var(--pm-text-mid);
+  color: var(--pm-text-mute);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESULT SCREEN
+   ═══════════════════════════════════════════════════════════ */
+
+.pokemac-result {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: var(--pm-viewport-bg);
+  gap: 16px;
+}
+
+.pokemac-result-banner {
+  font-family: var(--font-pixel), monospace;
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-align: center;
+}
+
+.pokemac-result-banner--win {
+  color: #4a8;
+}
+
+.pokemac-result-banner--lose {
+  color: #c44;
+}
+
+.pokemac-result-flipped {
+  text-align: center;
+}
+
+.pokemac-result-flipped-label {
+  font-family: var(--font-family-sans);
+  font-size: 12px;
+  color: var(--pm-text-mute);
+  margin-bottom: 6px;
+}
+
+.pokemac-result-flipped-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.pokemac-result-flipped-name {
+  font-family: var(--font-family-sans);
+  font-size: 11px;
+  color: #4a8;
+  background: rgba(74, 170, 136, 0.1);
+  padding: 2px 8px;
+  border: 1px solid rgba(74, 170, 136, 0.3);
+}
+
+.pokemac-result-tally {
+  font-family: var(--font-pixel), monospace;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--pm-text-mute);
+}
+
+@media (max-width: 768px) {
+  .pokemac-page {
+    padding: 0;
+  }
+
+  .pokemac-shell {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    height: 100%;
+  }
+
+  .pokemac-content {
+    flex-direction: column;
+  }
+
+  .pokemac-viewport {
+    flex: none;
+    /* Force a 4:3-ish aspect ratio on mobile */
+    height: 56vw;
+    min-height: 240px;
+  }
+
+  .pokemac-sidebar {
+    width: 100%;
+    flex: 1;
+    border-left: none;
+    border-top: 1px solid var(--pm-border);
+  }
+
+  .pokemac-nameplate {
+    min-width: 160px;
+    padding: 4px 8px;
+  }
+
+  .pokemac-nameplate-name {
+    font-size: 8px;
+  }
+
+  .pokemac-dialogue {
+    height: 64px;
+    padding: 10px 14px;
+  }
+
+  .pokemac-dialogue-text {
+    font-size: 9px;
+  }
+
+  .pokemac-sprite-placeholder {
+    width: 56px;
+    height: 64px;
+  }
+
+  .pokemac-sprite-placeholder--player {
+    width: 48px;
+    height: 56px;
+  }
+
+  .pokemac-class-select {
+    padding: 16px;
+  }
+
+  .pokemac-class-title {
+    font-size: 11px;
+  }
+
+  .pokemac-class-cards {
+    gap: 8px;
+  }
+
+  .pokemac-flip-container {
+    width: 170px;
+    height: 240px;
+  }
+
+  .pokemac-class-confirm {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .pokemac-class-confirm-preview {
+    flex-direction: column;
+  }
+
+  .pokemac-move-grid {
+    height: 72px;
+  }
+
+  .pokemac-move-name {
+    font-size: 7px;
+  }
+
+  .pokemac-move-meta {
+    font-size: 8px;
+  }
+}

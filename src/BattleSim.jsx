@@ -5,9 +5,26 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════
 
+export const WELL_KNOWN = new Set([
+  // Senate R
+  "Mitch McConnell", "John Thune", "Lindsey Graham", "Ted Cruz", "Marco Rubio",
+  "Rand Paul", "Tim Scott", "Josh Hawley", "Tom Cotton", "Susan Collins",
+  "Lisa Murkowski", "Rick Scott", "Marsha Blackburn", "Tommy Tuberville", "Joni Ernst",
+  // Senate D/I
+  "Chuck Schumer", "Bernie Sanders", "Elizabeth Warren", "Cory Booker", "Amy Klobuchar",
+  "Dick Durbin", "Patty Murray", "Kirsten Gillibrand", "Ed Markey", "Tammy Duckworth",
+  "John Fetterman", "Raphael Warnock", "Mark Kelly", "Jon Ossoff", "Adam Schiff",
+  // House R
+  "Mike Johnson", "Steve Scalise", "Jim Jordan", "Marjorie Taylor Greene",
+  "Lauren Boebert", "Dan Crenshaw", "Elise Stefanik", "Chip Roy", "Matt Gaetz", "Thomas Massie",
+  // House D
+  "Hakeem Jeffries", "Alexandria Ocasio-Cortez", "Ilhan Omar", "Rashida Tlaib",
+  "Pramila Jayapal", "Jamie Raskin", "Jim Clyburn", "Maxine Waters", "Jerry Nadler", "Ro Khanna",
+]);
+
 export const BATTLE_CLASSES = [
   {
-    id: "business_owner", name: "Small Business Owner",
+    id: "business_owner", name: "Small Business Owner", level: 12,
     description: "You employ 40 people in the district and this bill hits your bottom line. When you talk jobs and payroll, members listen.",
     intro: "You run a business in the senator's state. Your employees are counting on you.",
     coreMoves: ["local_impact", "horse_trade", "constituent_pressure", "policy_appeal"],
@@ -15,7 +32,7 @@ export const BATTLE_CLASSES = [
     strong: ["emotional", "transactional"], weak: ["pressure"],
   },
   {
-    id: "campaign_operative", name: "Campaign Operative",
+    id: "campaign_operative", name: "Campaign Operative", level: 15,
     description: "You ran the coordinated campaign last cycle and you know their polling numbers better than they do. Elections have consequences.",
     intro: "You ran the coordinated campaign last cycle. You know their numbers better than they do.",
     coreMoves: ["primary_threat", "constituent_pressure", "media_pressure", "local_impact"],
@@ -23,7 +40,7 @@ export const BATTLE_CLASSES = [
     strong: ["pressure"], weak: ["logical"],
   },
   {
-    id: "lobbyist", name: "K Street Lobbyist",
+    id: "lobbyist", name: "K Street Lobbyist", level: 25,
     description: "Your firm represents clients who care about this bill. A lot. Your rolodex is worth more than most PACs and everyone owes you a call back.",
     intro: "Your rolodex is worth more than most PACs. Everyone on the Hill owes you a call back.",
     coreMoves: ["donor_leverage", "horse_trade", "policy_appeal", "media_pressure"],
@@ -31,7 +48,7 @@ export const BATTLE_CLASSES = [
     strong: ["transactional"], weak: ["emotional"],
   },
   {
-    id: "policy_wonk", name: "Policy Wonk",
+    id: "policy_wonk", name: "Policy Wonk", level: 18,
     description: "You have a PhD and a 40-page brief on this exact issue. You've spent six months researching it and your briefing binder is two inches thick.",
     intro: "You've spent six months researching this issue. Your briefing binder is two inches thick.",
     coreMoves: ["policy_appeal", "constitutional_argument", "bipartisan_framing", "local_impact"],
@@ -39,7 +56,7 @@ export const BATTLE_CLASSES = [
     strong: ["logical"], weak: ["transactional"],
   },
   {
-    id: "veteran", name: "Veteran",
+    id: "veteran", name: "Veteran", level: 20,
     description: "You did two tours overseas and earned every medal on your chest. When you talk about duty and sacrifice, people sit up straight.",
     intro: "You did two tours overseas. When you talk about duty, people listen.",
     coreMoves: ["constitutional_argument", "constituent_pressure", "local_impact", "media_pressure"],
@@ -47,15 +64,15 @@ export const BATTLE_CLASSES = [
     strong: ["logical", "emotional"], weak: ["transactional"],
   },
   {
-    id: "parent", name: "Parent & Community Leader",
-    description: "Make it personal with local stories and grassroots credibility. Powerful emotional appeals but can't match a lobbyist's leverage.",
+    id: "parent", name: "Parent & Community Leader", level: 8,
+    description: "Your kids go to public school and you coach little league. When you talk about what a bill means for families, it hits different.",
     intro: "You've lived in this community for 20 years. You coach little league and run the food drive.",
     coreMoves: ["local_impact", "constituent_pressure", "bipartisan_framing", "media_pressure"],
     randomPool: ["horse_trade", "primary_threat", "policy_appeal", "personal_appeal"],
     strong: ["emotional"], weak: ["transactional"],
   },
   {
-    id: "party_insider", name: "Party Insider",
+    id: "party_insider", name: "Party Insider", level: 30,
     description: "Former Hill staffer who spent eight years in the Senate. You know the rules, the favors owed, and where a few skeletons are buried.",
     intro: "You worked in the Senate for 8 years. You know the rules, the favors owed, and the skeletons.",
     coreMoves: ["horse_trade", "primary_threat", "donor_leverage", "constituent_pressure"],
@@ -63,7 +80,7 @@ export const BATTLE_CLASSES = [
     strong: ["transactional", "pressure"], weak: ["logical"],
   },
   {
-    id: "student_activist", name: "Student Activist",
+    id: "student_activist", name: "Student Activist", level: 5,
     description: "You're 22 with 500k followers and you organized the campus walkout that made national news. You're not going away until you get a meeting.",
     intro: "You organized the campus walkout that made national news. Now you want a meeting.",
     coreMoves: ["media_pressure", "constituent_pressure", "local_impact", "primary_threat"],
@@ -956,9 +973,11 @@ export function groupTargets(nayVoters, bill) {
   return Object.entries(groups)
     .map(([key, members]) => {
       members.sort((a, b) => computeFlippability(b, bill) - computeFlippability(a, bill));
-      // Prefer Tier 1 members (those with biography/lobbying) as the face
+      // Priority: leadership role > well-known > has bio data > most flippable
+      const leader = members.find(m => m.r && !["Senator", "Rep."].includes(m.r));
+      const wellKnown = members.find(m => WELL_KNOWN.has(m.n));
       const tier1 = members.find(m => m.biography || m.lobbying);
-      const face = tier1 || members[0];
+      const face = leader || wellKnown || tier1 || members[0];
       const arch = face.personality?.archetype || "establishment";
       const avgFlip = members.reduce((s, m) => s + computeFlippability(m, bill), 0) / members.length;
       return {
