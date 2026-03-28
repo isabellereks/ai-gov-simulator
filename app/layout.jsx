@@ -18,16 +18,18 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={pressStart2P.variable}>
-      <body>
-        {children}
-        <Analytics />
-        {process.env.NODE_ENV === "development" && (
+      {process.env.NODE_ENV === "development" && (
+        <head>
           <Script
             src="//unpkg.com/react-grab/dist/index.global.js"
             crossOrigin="anonymous"
             strategy="beforeInteractive"
           />
-        )}
+        </head>
+      )}
+      <body>
+        {children}
+        <Analytics />
       </body>
     </html>
   );

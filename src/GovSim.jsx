@@ -1208,6 +1208,12 @@ export default function GovSim() {
   const pct = timeline ? Math.min(1, playhead / timeline.duration) : 0;
   const isActive = snap.stage !== "idle" && snap.stage !== "done";
 
+  if (!mounted) {
+    return (
+      <div style={{ width: "100%", height: "100dvh", background: C.bg }} />
+    );
+  }
+
   return (
     <div className="gs-page-enter" onMouseMove={e => setMp({ x: e.clientX, y: e.clientY })} onClick={e => { if (mob && hov && !e.target.closest("g")) setHov(null); }}
       style={{ width: "100%", height: "100dvh", overflow: "hidden", position: "relative", background: C.bg, fontFamily: SERIF, color: C.text, touchAction: "manipulation" }}>

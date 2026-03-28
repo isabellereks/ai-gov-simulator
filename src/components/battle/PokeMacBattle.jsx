@@ -17,6 +17,7 @@ import {
   ensureSfxInit,
 } from "@/src/lib/sfx";
 import { computeFlippability, groupTargets } from "@/src/BattleSim";
+import { getSceneType } from "@/src/lib/battleScenes";
 
 // ─── GAME DATA (duplicated from BattleSim since not exported) ───
 const MOVES = {
@@ -1236,12 +1237,12 @@ export default function PokeMacBattle({
           >
             You need {votesShort} more vote{votesShort !== 1 ? "s" : ""} to pass
           </div>
-          <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "nowrap" }}>
             <button
               onClick={handleFight}
               className="gs-interactive gs-btn-primary"
               style={{
-                padding: mob ? "8px 20px" : "10px 28px",
+                padding: mob ? "8px 16px" : "10px 28px",
                 borderRadius: R.md,
                 border: "none",
                 background: `linear-gradient(135deg, ${C.text}, #3d3428)`,
@@ -1252,6 +1253,7 @@ export default function PokeMacBattle({
                 cursor: "pointer",
                 transition: "all 150ms ease",
                 boxShadow: "0 2px 8px rgba(44,36,24,0.15)",
+                whiteSpace: "nowrap",
               }}
             >
               Battle for it
@@ -1260,7 +1262,7 @@ export default function PokeMacBattle({
               onClick={onSkip}
               className="gs-interactive gs-btn-ghost"
               style={{
-                padding: mob ? "8px 20px" : "10px 28px",
+                padding: mob ? "8px 16px" : "10px 28px",
                 borderRadius: R.md,
                 border: "none",
                 background: C.bg,
@@ -1271,6 +1273,7 @@ export default function PokeMacBattle({
                 cursor: "pointer",
                 transition: "all 150ms ease",
                 boxShadow: "0 1px 4px rgba(44,36,24,0.08)",
+                whiteSpace: "nowrap",
               }}
             >
               Accept defeat
@@ -1321,6 +1324,7 @@ export default function PokeMacBattle({
   if (phase === "battle" && currentTarget) {
     const member = currentTarget.face;
     const archetype = member.personality?.archetype || "establishment";
+    const sceneType = getSceneType(chamber, playerClass, archetype);
     if (seniorityRef.current === null) {
       seniorityRef.current = member.seniority || ARCHETYPE_DEFAULT_SENIORITY[archetype] || 10;
     }
@@ -1386,6 +1390,7 @@ export default function PokeMacBattle({
           messages={messages}
           onDialogueComplete={handleDialogueComplete}
           moveGrid={moveGrid}
+          sceneType={sceneType}
         >
           {effectivenessPopup && (
             <div className="pokemac-effectiveness" style={{ color: effectivenessPopup.color }}>

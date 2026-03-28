@@ -11,6 +11,7 @@ import {
   playVictory,
   playSelect,
 } from "@/src/lib/sfx";
+import { getSceneType } from "@/src/lib/battleScenes";
 
 const MOVES = {
   policy_appeal: {
@@ -752,10 +753,12 @@ export default function BattleEngine({
   playerName,
   playerLocation,
   bill,
+  chamber,
   onComplete,
 }) {
   const member = target.face;
   const archetype = member.personality?.archetype || "establishment";
+  const sceneType = getSceneType(chamber, playerClass, archetype);
   const maxTurns = 8;
 
   const [senatorHP, setSenatorHP] = useState(100);
@@ -1020,6 +1023,7 @@ export default function BattleEngine({
         messages={messages}
         onDialogueComplete={onDialogueComplete}
         moveGrid={moveGrid}
+        sceneType={sceneType}
       >
         {/* Effectiveness popup */}
         {effectivenessPopup && (

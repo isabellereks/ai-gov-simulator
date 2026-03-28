@@ -1,6 +1,7 @@
 "use client";
 import PixelTypewriter from "./PixelTypewriter";
 import CSSSprite, { TrainerSprite } from "./CSSSprite";
+import BattleCanvas from "./BattleCanvas";
 
 export default function BattleViewport({
   // Enemy data
@@ -22,6 +23,8 @@ export default function BattleViewport({
   onDialogueAdvance,
   // Render slots
   moveGrid = null,
+  // Scene
+  sceneType = "congressional_office",
   children,
 }) {
   const enemyHpPct = Math.max(0, (enemyHp / enemyMaxHp) * 100);
@@ -33,6 +36,7 @@ export default function BattleViewport({
     <div className="pokemac-viewport">
       {/* Battle scene */}
       <div className="pokemac-scene">
+        <BattleCanvas sceneType={sceneType} />
         {/* Enemy side (top-right) */}
         <div className="pokemac-enemy-area">
           <div className="pokemac-nameplate pokemac-nameplate--enemy">

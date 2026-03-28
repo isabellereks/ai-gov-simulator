@@ -469,9 +469,20 @@ body {
 .pokemac-scene {
   flex: 1;
   position: relative;
-  background:
-    linear-gradient(180deg, #3a5a3a 0%, #4a7a4a 40%, #5a8a5a 40.5%, #4a7040 60%, #3d5a2e 100%);
+  background: #1a1a2e;
   overflow: hidden;
+}
+
+.pokemac-scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg, transparent 0px, transparent 2px,
+    rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px
+  );
 }
 
 /* ─── GROUND ELLIPSES ─── */
@@ -500,6 +511,7 @@ body {
   position: absolute;
   top: 8%;
   right: 4%;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -510,6 +522,7 @@ body {
   position: absolute;
   bottom: 8%;
   left: 4%;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -915,9 +928,13 @@ body {
   pointer-events: none;
   white-space: nowrap;
   font-family: var(--font-pixel), monospace;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: bold;
-  text-shadow: 0 0 12px currentColor;
+  text-shadow:
+    0 0 8px currentColor,
+    0 0 20px currentColor,
+    0 1px 3px rgba(0,0,0,0.8);
+  -webkit-text-stroke: 0.5px rgba(0,0,0,0.3);
   animation: pokemac-eff-pop 1.5s ease-out forwards;
 }
 
