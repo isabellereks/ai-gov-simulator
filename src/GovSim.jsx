@@ -4,6 +4,8 @@ import { Button } from "@/src/components/ui/button";
 import { Card, CardTitle, CardContent } from "@/src/components/ui/card";
 import { Input } from "@/src/components/ui/input";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from "@/src/components/ui/dialog";
+import { BATTLE_CLASSES, WELL_KNOWN } from "./BattleSim";
+import PokeMacBattle from "@/src/components/battle/PokeMacBattle";
 
 // ─── DESIGN TOKENS ───
 const C = {
@@ -26,10 +28,7 @@ const S = {
 };
 
 // ─── NOTABLE MEMBERS (shimmer highlight) ───
-const NOTABLE = new Set([
-  "Ted Cruz", "Bernie Sanders", "Hakeem Jeffries",
-  "Mike Johnson", "Chuck Schumer", "Alexandria Ocasio-Cortez",
-]);
+const NOTABLE = WELL_KNOWN;
 
 // ─── ISSUE LABELS ───
 // Each issue has [leftLabel, rightLabel] — 0.0=left position, 1.0=right position
@@ -430,8 +429,11 @@ function computeVote(member, bill) {
   }
 
   // Noise inversely proportional to ideological rigidity
+  // Also reduce noise when alignment is very strong — strongly-aligned members shouldn't flip on noise alone
   const rigidity = member.behavior?.ideological_rigidity || 0.5;
-  const noise = (1 - rigidity) * (Math.random() - 0.5) * 0.3;
+  const alignmentStrength = totalWeight > 0 ? Math.abs(alignment / totalWeight) : 0;
+  const noiseDampen = alignmentStrength > 0.6 ? 0.3 : alignmentStrength > 0.4 ? 0.6 : 1;
+  const noise = (1 - rigidity) * (Math.random() - 0.5) * 0.3 * noiseDampen;
 
   return (baseProb + noise) > 0.5;
 }
@@ -611,8 +613,8 @@ function getVoteReason(member, bill) {
 }
 
 // ─── SIMULATION FUNCTIONS ───
-function sim(members, bill) {
-  const r = members.map(m => ({ ...m, v: computeVote(m, bill) }));
+function sim(members, bill, forced) {
+  const r = members.map(m => ({ ...m, v: forced?.[m.id] !== undefined ? forced[m.id] : computeVote(m, bill) }));
   const y = r.filter(x => x.v).length;
   return { r, y, n: r.length - y, ok: y > r.length / 2 };
 }
@@ -626,30 +628,30 @@ function simSCOTUS(members, bill) {
 // ─── VIEWS ───
 const isFullHouse = HOU.length > 100;
 const VIEWS_MOB = {
-  idle: { x: -60, y: -30, w: 1440, h: 860 },
-  hou: isFullHouse ? { x: -30, y: 340, w: 660, h: 360 } : { x: 60, y: 420, w: 460, h: 260 },
+  idle: { x: -60, y: -30, w: 1600, h: 860 },
+  hou: isFullHouse ? { x: -100, y: 80, w: 820, h: 620 } : { x: 60, y: 420, w: 460, h: 260 },
   sen: { x: 20, y: -10, w: 560, h: 300 },
-  exc: { x: 480, y: 80, w: 460, h: 360 },
-  sct: { x: 830, y: 120, w: 440, h: 300 },
-  hou_override: isFullHouse ? { x: -30, y: 340, w: 660, h: 360 } : { x: 60, y: 420, w: 460, h: 260 },
+  exc: { x: 620, y: 80, w: 460, h: 360 },
+  sct: { x: 1030, y: 120, w: 440, h: 300 },
+  hou_override: isFullHouse ? { x: -100, y: 80, w: 820, h: 620 } : { x: 60, y: 420, w: 460, h: 260 },
   sen_override: { x: 20, y: -10, w: 560, h: 300 },
-  done: { x: -60, y: -30, w: 1440, h: 860 },
+  done: { x: -60, y: -30, w: 1600, h: 860 },
 };
 const VIEWS_DT = {
-  idle: { x: -80, y: -50, w: 1540, h: 940 },
-  hou: isFullHouse ? { x: -30, y: 340, w: 660, h: 360 } : { x: 30, y: 400, w: 540, h: 300 },
+  idle: { x: -60, y: -30, w: 1600, h: 800 },
+  hou: isFullHouse ? { x: -100, y: 130, w: 820, h: 620 } : { x: 30, y: 400, w: 540, h: 300 },
   sen: { x: 10, y: -20, w: 580, h: 300 },
-  exc: { x: 460, y: 50, w: 500, h: 430 },
-  sct: { x: 830, y: 100, w: 440, h: 320 },
-  hou_override: isFullHouse ? { x: -30, y: 340, w: 660, h: 360 } : { x: 30, y: 400, w: 540, h: 300 },
+  exc: { x: 620, y: 50, w: 500, h: 430 },
+  sct: { x: 1030, y: 100, w: 440, h: 320 },
+  hou_override: isFullHouse ? { x: -100, y: 120, w: 820, h: 620 } : { x: 30, y: 400, w: 540, h: 300 },
   sen_override: { x: 10, y: -20, w: 580, h: 300 },
-  done: { x: -80, y: -50, w: 1540, h: 940 },
+  done: { x: -60, y: -30, w: 1600, h: 800 },
 };
 
 function lerp(a, b, t) { return a + (b - a) * t; }
 
 // ─── TIMELINE BUILDER ───
-function buildTimeline(policy) {
+function buildTimeline(policy, forcedVotes) {
   const ev = []; let t = 0;
   const shuf = a => [...a].sort(() => Math.random() - 0.5);
   const startChamber = policy.startChamber || (Math.random() < 0.5 ? "hou" : "sen");
@@ -661,21 +663,21 @@ function buildTimeline(policy) {
     : { members: SEN, label: "sen", resultType: "senateResult", stagger: 18, nextLabel: "Presidential Action" };
 
   // First chamber
-  const r1 = sim(first.members, policy);
+  const r1 = sim(first.members, policy, forcedVotes?.[first.label]);
   ev.push({ t, type: "stage", val: first.label }, { t, type: "counter", y: 0, n: 0 }); t += 600;
   const s1 = shuf(r1.r); let y1 = 0, n1 = 0;
   s1.forEach((m, i) => { if (m.v) y1++; else n1++; ev.push({ t: t + i * first.stagger, type: "vote", id: m.id, v: m.v }, { t: t + i * first.stagger, type: "counter", y: y1, n: n1 }); });
   t += s1.length * first.stagger + 400; ev.push({ t, type: first.resultType, ...r1 });
-  if (!r1.ok) { t += 300; ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Defeated", w: first.label === "hou" ? "House" : "Senate" }); return { events: ev, duration: t + 2000, startChamber }; }
+  if (!r1.ok) { t += 300; ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Defeated", w: first.label === "hou" ? "House" : "Senate" }); return { events: ev, duration: t + 2000, startChamber, voteData: { [first.label]: r1 } }; }
   t += 600; ev.push({ t, type: "pause", next: first.nextLabel }); t += 100;
 
   // Second chamber
-  const r2 = sim(second.members, policy);
+  const r2 = sim(second.members, policy, forcedVotes?.[second.label]);
   ev.push({ t, type: "stage", val: second.label }, { t, type: "counter", y: 0, n: 0 }); t += 600;
   const s2 = shuf(r2.r); let y2 = 0, n2 = 0;
   s2.forEach((m, i) => { if (m.v) y2++; else n2++; ev.push({ t: t + i * second.stagger, type: "vote", id: m.id, v: m.v }, { t: t + i * second.stagger, type: "counter", y: y2, n: n2 }); });
   t += s2.length * second.stagger + 400; ev.push({ t, type: second.resultType, ...r2 });
-  if (!r2.ok) { t += 300; ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Defeated", w: second.label === "hou" ? "House" : "Senate" }); return { events: ev, duration: t + 2000, startChamber }; }
+  if (!r2.ok) { t += 300; ev.push({ t, type: "stage", val: "done" }, { t, type: "outcome", s: "Defeated", w: second.label === "hou" ? "House" : "Senate" }); return { events: ev, duration: t + 2000, startChamber, voteData: { [first.label]: r1, [second.label]: r2 } }; }
   t += 600; ev.push({ t, type: "pause", next: "Presidential Action" }); t += 100;
 
   // President
@@ -908,11 +910,12 @@ export default function GovSim() {
   const win = useWindowSize();
   const mob = mounted && win.w < 768;
   const sm = mounted && win.w < 480;
-  const [timeline, setTimeline] = useState(null);
+  const [restoredPol] = useState(() => { try { const s = sessionStorage.getItem("gs_policy"); return s ? JSON.parse(s) : null; } catch { return null; } });
+  const [timeline, setTimeline] = useState(() => restoredPol ? buildTimeline(restoredPol) : null);
   const [playhead, setPlayhead] = useState(0);
-  const [playing, setPlaying] = useState(false);
+  const [playing, setPlaying] = useState(!!restoredPol);
   const [speed, setSpeed] = useState(1);
-  const [pol, setPol] = useState(null);
+  const [pol, setPol] = useState(restoredPol);
   const [hov, setHov] = useState(null);
   const [mp, setMp] = useState({ x: 0, y: 0 });
   const [vb, setVb] = useState(VIEWS_DT.idle);
@@ -920,6 +923,16 @@ export default function GovSim() {
 
   // Custom bill state
   const [customBill, setCustomBill] = useState("");
+
+  // ─── BATTLE SYSTEM STATE ───
+  const [playerClass, setPlayerClass] = useState(null);
+  const [playerName, setPlayerName] = useState("");
+  const [classOptions, setClassOptions] = useState(() => {
+    const shuffled = [...BATTLE_CLASSES].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 3);
+  });
+  const [battlePhase, setBattlePhase] = useState(null);
+  const battleDone = useRef(false);
 
   // API key state (persisted in localStorage)
   const [apiKey, setApiKey] = useState("");
@@ -1004,7 +1017,7 @@ export default function GovSim() {
         const rowCount = Math.min(perRow, HOU.length - row * perRow);
         const a = Math.PI * 0.04 + (inRow / (rowCount - 1 || 1)) * Math.PI * 0.92;
         const r = 70 + row * 14;
-        p[h.id] = { x: Math.cos(a) * r + 300, y: Math.sin(a) * r + 480 };
+        p[h.id] = { x: Math.cos(a) * r + 300, y: Math.sin(a) * r + 380 };
       });
     } else {
       houSorted.forEach((h, idx) => {
@@ -1013,8 +1026,8 @@ export default function GovSim() {
         p[h.id] = { x: Math.cos(a) * (95 + row * 24) + 300, y: Math.sin(a) * (95 + row * 24) + 520 };
       });
     }
-    // Executive cluster — center, 25 members
-    const cx = 700, cy = 300;
+    // Executive cluster — right of center, 25 members
+    const cx = 850, cy = 300;
     p[EXC[0].id] = { x: cx, y: cy }; // President
     if (EXC[1]) p[EXC[1].id] = { x: cx, y: cy - 55 }; // VP
     const ring1 = EXC.slice(2, 10); // inner ring — key cabinet
@@ -1027,8 +1040,8 @@ export default function GovSim() {
       const a = (idx / ring2.length) * Math.PI * 2 - Math.PI / 2;
       p[e.id] = { x: cx + Math.cos(a) * 130, y: cy + Math.sin(a) * 130 };
     });
-    // SCOTUS — right
-    const bx = 1050, by = 300;
+    // SCOTUS — far right
+    const bx = 1250, by = 300;
     p[SCT[0].id] = { x: bx, y: by - 70 };
     [3, 4, 8, 7, 6, 5, 2, 1].forEach((ji, idx) => {
       if (SCT[ji]) p[SCT[ji].id] = { x: bx - 140 + idx * 40, y: by };
@@ -1051,9 +1064,98 @@ export default function GovSim() {
     return so.map(s => ({ label: lb[s.val] || "", start: s.start / timeline.duration, end: s.end / timeline.duration, mid: ((s.start + s.end) / 2) / timeline.duration }));
   }, [timeline]);
 
-  const go = useCallback(policy => { setPol(policy); setTimeline(buildTimeline(policy)); setPlayhead(0); setPlaying(true); setAnalyzing(false); }, []);
-  const reset = () => { setTimeline(null); setPol(null); setPlayhead(0); setPlaying(false); setAnalyzing(false); };
+  const reshuffleClasses = () => { const shuffled = [...BATTLE_CLASSES].sort(() => Math.random() - 0.5); setClassOptions(shuffled.slice(0, 3)); };
+  const go = useCallback(policy => { setPol(policy); setTimeline(buildTimeline(policy)); setPlayhead(0); setPlaying(true); setAnalyzing(false); battleDone.current = false; battledChambers.current = new Set(); setBattlePhase(null); setPlayerClass(null); setPlayerName(""); reshuffleClasses(); try { sessionStorage.setItem("gs_policy", JSON.stringify(policy)); } catch {} }, []);
+  const reset = () => { setTimeline(null); setPol(null); setPlayhead(0); setPlaying(false); setAnalyzing(false); setBattlePhase(null); battleDone.current = false; battledChambers.current = new Set(); setPlayerClass(null); setPlayerName(""); reshuffleClasses(); try { sessionStorage.removeItem("gs_policy"); } catch {} };
   const replay = () => { setPlayhead(0); setPlaying(true); cur.current = VIEWS.idle; };
+
+  // ─── BATTLE PHASE DETECTION ───
+  useEffect(() => {
+    if (snap.out?.s === "Defeated" && !battlePhase && !battleDone.current && timeline?.voteData) {
+      const failedChamber = snap.out.w === "House" ? "hou" : "sen";
+      // Don't offer battle if we already fought in this chamber
+      if (battledChambers.current.has(failedChamber)) return;
+      const failedMembers = failedChamber === "hou" ? HOU : SEN;
+      const voteData = timeline.voteData[failedChamber];
+      if (!voteData) return;
+      const threshold = Math.floor(failedMembers.length / 2) + 1;
+      setPlaying(false);
+      setBattlePhase({ chamber: failedChamber, chamberLabel: snap.out.w, members: failedMembers, voteResults: voteData, yeaCount: voteData.y, nayCount: voteData.n, threshold });
+    }
+  }, [snap.out, battlePhase, timeline]);
+
+  // Track which chambers the player has already battled in
+  const battledChambers = useRef(new Set());
+
+  const handleBattleComplete = useCallback((flippedIds) => {
+    const chamber = battlePhase.chamber;
+    battledChambers.current.add(chamber);
+
+    if (!flippedIds || flippedIds.length === 0) {
+      battleDone.current = true;
+      setBattlePhase(null);
+      return;
+    }
+
+    // Build forced votes to make the chamber pass
+    const forcedVotes = {};
+    // Preserve existing chamber votes
+    for (const ch of Object.keys(timeline.voteData)) {
+      forcedVotes[ch] = {};
+      for (const m of timeline.voteData[ch].r) { forcedVotes[ch][m.id] = m.v; }
+    }
+    // Override flipped members (skip VP_VANCE — not a real senator)
+    const hasVP = chamber === "sen" && flippedIds.includes("vp_vance");
+    for (const id of flippedIds) {
+      if (id === "vp_vance") continue;
+      if (forcedVotes[chamber]) forcedVotes[chamber][id] = true;
+    }
+    // Safety net: if battle was won, guarantee the chamber passes.
+    // Force additional nay voters to yea if needed (handles VP tiebreak
+    // and any counting mismatch between battle UI and sim).
+    if (forcedVotes[chamber]) {
+      const members = chamber === "sen" ? SEN : HOU;
+      const needed = Math.floor(members.length / 2) + 1;
+      let yeaCount = 0;
+      for (const m of members) {
+        if (forcedVotes[chamber][m.id] === true) yeaCount++;
+      }
+      if (yeaCount < needed) {
+        const voteData = timeline.voteData[chamber];
+        if (voteData) {
+          const nays = voteData.r.filter(m => !forcedVotes[chamber][m.id]);
+          for (const m of nays) {
+            if (yeaCount >= needed) break;
+            forcedVotes[chamber][m.id] = true;
+            yeaCount++;
+          }
+        }
+      }
+    }
+    // Rebuild timeline — preserve chamber order so the battled chamber isn't skipped
+    const savedStart = pol.startChamber;
+    pol.startChamber = timeline.startChamber;
+    const newTimeline = buildTimeline(pol, forcedVotes);
+    pol.startChamber = savedStart;
+    if (newTimeline.voteData?.[chamber]?.ok) {
+      setTimeline(newTimeline);
+      // Skip past the battled chamber to the pause after it
+      const resultType = chamber === "hou" ? "houseResult" : "senateResult";
+      const resultEvent = newTimeline.events.find(e => e.type === resultType);
+      if (resultEvent) setPlayhead(resultEvent.t + 50);
+      // Don't mark battleDone — the other chamber may still need a battle
+      battleDone.current = false;
+      setPlaying(true);
+    } else {
+      battleDone.current = true;
+    }
+    setBattlePhase(null);
+  }, [battlePhase, timeline, pol]);
+
+  const handleBattleSkip = useCallback(() => {
+    battleDone.current = true;
+    setBattlePhase(null);
+  }, []);
 
   // Custom bill analyzer — Haiku when API key available, keyword fallback otherwise
   const [analyzing, setAnalyzing] = useState(false);
@@ -1106,19 +1208,26 @@ export default function GovSim() {
   const pct = timeline ? Math.min(1, playhead / timeline.duration) : 0;
   const isActive = snap.stage !== "idle" && snap.stage !== "done";
 
+  if (!mounted) {
+    return (
+      <div style={{ width: "100%", height: "100dvh", background: C.bg }} />
+    );
+  }
+
   return (
-    <div onMouseMove={e => setMp({ x: e.clientX, y: e.clientY })} onClick={e => { if (mob && hov && !e.target.closest("g")) setHov(null); }}
+    <div className="gs-page-enter" onMouseMove={e => setMp({ x: e.clientX, y: e.clientY })} onClick={e => { if (mob && hov && !e.target.closest("g")) setHov(null); }}
       style={{ width: "100%", height: "100dvh", overflow: "hidden", position: "relative", background: C.bg, fontFamily: SERIF, color: C.text, touchAction: "manipulation" }}>
       {/* Animations and hover styles are in globals.css */}
       {/* Texture */}
       <div style={{ position: "absolute", inset: 0, opacity: .02, pointerEvents: "none", backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`, backgroundSize: "256px" }} />
 
-      {/* SVG */}
-      <svg viewBox={vbStr} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} preserveAspectRatio="xMidYMid meet">
+      {/* SVG — only render after mount to avoid hydration mismatch from float precision */}
+      <svg viewBox={vbStr} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} preserveAspectRatio="xMidYMid meet" suppressHydrationWarning>
+        {mounted && <>
         <text x="300" y="16" textAnchor="middle" style={{ fontSize: 14, fill: C.textMid, letterSpacing: 4, fontFamily: SANS, fontWeight: 700 }}>UNITED STATES SENATE</text>
-        <text x="300" y="470" textAnchor="middle" style={{ fontSize: 14, fill: C.textMid, letterSpacing: 4, fontFamily: SANS, fontWeight: 700 }}>HOUSE OF REPRESENTATIVES</text>
-        <text x="700" y="135" textAnchor="middle" style={{ fontSize: 14, fill: C.textMid, letterSpacing: 4, fontFamily: SANS, fontWeight: 700 }}>EXECUTIVE</text>
-        <text x="1050" y="190" textAnchor="middle" style={{ fontSize: 14, fill: C.textMid, letterSpacing: 4, fontFamily: SANS, fontWeight: 700 }}>SUPREME COURT</text>
+        <text x="300" y="370" textAnchor="middle" style={{ fontSize: 14, fill: C.textMid, letterSpacing: 4, fontFamily: SANS, fontWeight: 700 }}>HOUSE OF REPRESENTATIVES</text>
+        <text x="850" y="135" textAnchor="middle" style={{ fontSize: 14, fill: C.textMid, letterSpacing: 4, fontFamily: SANS, fontWeight: 700 }}>EXECUTIVE</text>
+        <text x="1250" y="190" textAnchor="middle" style={{ fontSize: 14, fill: C.textMid, letterSpacing: 4, fontFamily: SANS, fontWeight: 700 }}>SUPREME COURT</text>
 
         {all.map((m, idx) => {
           const p = positions[m.id]; if (!p) return null;
@@ -1144,6 +1253,7 @@ export default function GovSim() {
         {SCT.map(j => { const p = positions[j.id]; return p && <text key={j.id + "l"} x={p.x} y={p.y + nr(j) + 16} textAnchor="middle" style={{ fontSize: 8, fill: C.textMid, fontFamily: SANS, fontWeight: 600, pointerEvents: "none" }}>{j.r === "Chief Justice" ? "CJ Roberts" : j.n.split(" ").pop()}</text>; })}
         {/* President + VP labels */}
         {EXC.slice(0, 2).map(m => { const p = positions[m.id]; return p && <text key={m.id + "l"} x={p.x} y={p.y + nr(m) + 14} textAnchor="middle" style={{ fontSize: 10, fill: C.text, fontFamily: SANS, fontWeight: 700, pointerEvents: "none" }}>{m.n.split(" ").pop()}</text>; })}
+        </>}
       </svg>
 
       {/* ─── Top bar ─── */}
@@ -1220,8 +1330,8 @@ export default function GovSim() {
           </Card>
         </div>}
 
-      {/* ─── Outcome ─── */}
-      {snap.out && (() => {
+      {/* ─── Outcome (hidden during battle phase, show for non-defeat outcomes or after battle is done) ─── */}
+      {snap.out && !battlePhase && (snap.out.s !== "Defeated" || battleDone.current) && (() => {
         const won = snap.out.s === "Enacted";
         const label = { Enacted: "Law Enacted", Defeated: `Defeated in the ${snap.out.w}`, Vetoed: "Veto Sustained", Unconstitutional: "Ruled Unconstitutional" }[snap.out.s];
         const accent = won ? C.yea : C.nay;
@@ -1230,8 +1340,8 @@ export default function GovSim() {
             <CardTitle style={{ marginBottom: 6, fontSize: mob ? 10 : 11 }}>Final Result</CardTitle>
             <CardContent style={{ fontSize: mob ? 22 : 34, fontWeight: 600, fontFamily: SANS, color: accent, lineHeight: 1.1 }}>{label}</CardContent>
             <div style={{ marginTop: mob ? 8 : 10, display: "flex", gap: 8, justifyContent: "center" }}>
-              <Button variant="ghost" size={mob ? "sm" : "md"} onClick={() => { reset(); }} style={{ padding: mob ? "7px 16px" : "8px 20px", fontSize: mob ? 11 : 12, fontWeight: 500, letterSpacing: 0 }}>Try a new bill</Button>
-              <Button variant="ghost" size={mob ? "sm" : "md"} onClick={() => { setPlayhead(0); setPlaying(true); }} style={{ padding: mob ? "7px 16px" : "8px 20px", fontSize: mob ? 11 : 12, fontWeight: 500, letterSpacing: 0 }}>Replay</Button>
+              <Button variant="ghost" size={mob ? "sm" : "md"} onClick={() => { reset(); }} style={{ padding: mob ? "7px 16px" : "8px 20px", fontSize: mob ? 11 : 12, fontWeight: 600, letterSpacing: 0, border: "none", boxShadow: "0 1px 4px rgba(44,36,24,0.08)" }}>Try a new bill</Button>
+              <Button variant="ghost" size={mob ? "sm" : "md"} onClick={() => { setPlayhead(0); setPlaying(true); }} style={{ padding: mob ? "7px 16px" : "8px 20px", fontSize: mob ? 11 : 12, fontWeight: 600, letterSpacing: 0, border: "none", boxShadow: "0 1px 4px rgba(44,36,24,0.08)" }}>Replay</Button>
             </div>
           </Card>
         </div>;
@@ -1413,6 +1523,31 @@ export default function GovSim() {
           </div>
         </div>
       </div>}
+
+      {/* ─── BATTLE SYSTEM OVERLAY ─── */}
+      {battlePhase && (
+        <PokeMacBattle
+          policy={pol}
+          chamber={battlePhase.chamber}
+          chamberLabel={battlePhase.chamberLabel}
+          members={battlePhase.members}
+          voteResults={battlePhase.voteResults}
+          yeaCount={battlePhase.yeaCount}
+          nayCount={battlePhase.nayCount}
+          threshold={battlePhase.threshold}
+          playerClass={playerClass}
+          setPlayerClass={setPlayerClass}
+          playerName={playerName}
+          setPlayerName={setPlayerName}
+          classOptions={classOptions}
+          onComplete={handleBattleComplete}
+          onSkip={handleBattleSkip}
+          colors={C}
+          fonts={{ sans: SANS, serif: SERIF }}
+          radii={R}
+          mob={mob}
+        />
+      )}
     </div>
   );
 }

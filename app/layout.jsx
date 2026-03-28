@@ -1,6 +1,14 @@
 import "./globals.css";
 import Script from "next/script";
 import { Analytics } from "@vercel/analytics/react";
+import { Press_Start_2P } from "next/font/google";
+
+const pressStart2P = Press_Start_2P({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-pixel",
+  display: "swap",
+});
 
 export const metadata = {
   title: "PolicySim",
@@ -9,17 +17,19 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
-      <body>
-        {children}
-        <Analytics />
-        {process.env.NODE_ENV === "development" && (
+    <html lang="en" className={pressStart2P.variable}>
+      {process.env.NODE_ENV === "development" && (
+        <head>
           <Script
             src="//unpkg.com/react-grab/dist/index.global.js"
             crossOrigin="anonymous"
             strategy="beforeInteractive"
           />
-        )}
+        </head>
+      )}
+      <body>
+        {children}
+        <Analytics />
       </body>
     </html>
   );
