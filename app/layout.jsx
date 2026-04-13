@@ -12,7 +12,7 @@ const pressStart2P = Press_Start_2P({
 
 export const metadata = {
   title: "PolicySim",
-  icons: { icon: "/favicon.jpeg" },
+  icons: { icon: "/favicon.svg" },
 };
 
 export default function RootLayout({ children }) {
